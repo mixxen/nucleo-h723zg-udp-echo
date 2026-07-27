@@ -1,0 +1,12 @@
+# Rust build output
+Rust/target/
+
+# STM32 for VS Code / CubeIDE generated output
+STM32CubeIDE/build/
+STM32CubeIDE/.stm32env
+STM32CubeIDE/.vscode/
+
+# Common editor and OS files
+.vs/
+.DS_Store
+Thumbs.db
