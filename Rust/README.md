@@ -222,6 +222,40 @@ computer for the `192.168.0.0/24` subnet and use `192.168.0.10`.
 
 ## Test
 
+### Host unit tests
+
+The STM32 hardware drivers cannot execute as ordinary Windows or Linux
+processes. Hardware-independent production rules therefore live in
+`src/lib.rs`, which has no Embassy or STM32 dependencies. The firmware imports
+that library, while Cargo can compile the same code with the host's normal
+Rust test harness.
+
+On Windows, run the **Rust: run unit tests** VS Code task or:
+
+```powershell
+cargo test --locked --lib --target x86_64-pc-windows-msvc
+```
+
+The explicit host target is necessary because `.cargo/config.toml` defaults
+normal firmware commands to the ARM target. The unit suite checks:
+
+- empty, partial, and full-buffer echo payloads;
+- rejection of an invalid receive length;
+- locally administered/unicast MAC address bits;
+- fallback address and gateway subnet consistency; and
+- capacity for a standard unfragmented Ethernet/IPv4 UDP payload.
+
+These tests exercise deterministic application rules, not the Ethernet
+peripheral, PHY, interrupts, DHCP server, or physical network. Those remain
+covered by the board-level test below.
+
+The GitHub Actions workflow in `../.github/workflows/rust.yml` runs the unit tests
+on Linux for every push and pull request. It also checks formatting, runs
+Clippy against the embedded ARM target with warnings denied, and builds the
+release firmware using `Cargo.lock`.
+
+### Board-level UDP test
+
 Run the VS Code **Rust: test UDP echo** task or:
 
 ```powershell
@@ -248,9 +282,11 @@ ping, and returned a byte-identical UDP payload from port 7.
 
 ## Source layout
 
+- `src/lib.rs`: hardware-independent constants, checked payload logic, and unit tests
 - `src/main.rs`: clocks, board pins, Ethernet construction, and task startup
 - `src/network.rs`: DHCP, static fallback, link state, and LEDs
 - `src/udp_echo.rs`: bounded-buffer UDP echo task
+- `../.github/workflows/rust.yml`: host tests and embedded build checks on GitHub
 - `memory.x`: conservative H723 flash and AXI SRAM layout
 - `tools/flash.ps1`: repeatable OpenOCD build/flash flow
 - `tools/udp_echo_test.ps1`: host-side binary UDP acceptance test

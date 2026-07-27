@@ -60,6 +60,19 @@ See [the complete Rust architecture and Embassy primer](Rust/README.md#architect
 for the request data path, task lifecycle, and a C/C++-to-Rust mental-model
 table.
 
+### Rust testing strategy
+
+Hardware-independent production rules live in `Rust/src/lib.rs` and are unit
+tested on an ordinary Windows or Linux host. This includes checked UDP payload
+boundaries, MAC-address properties, fallback-network consistency, and payload
+capacity. The STM32/Embassy dependencies are compiled only for ARM, so host
+tests do not need an emulator or attached board.
+
+The workflow in `.github/workflows/rust.yml` runs those unit tests for every
+push and pull request. It also checks formatting, runs strict Clippy against
+the embedded target, and builds the release firmware. Physical Ethernet, PHY,
+DHCP, and interrupt behavior remain covered by the board-level UDP test.
+
 ### Ethernet hardware: MAC, RMII, and PHY
 
 The STM32 does not connect its digital Ethernet controller directly to the

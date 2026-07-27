@@ -6,11 +6,8 @@
 use defmt::{info, unwrap, warn};
 use embassy_net::Stack;
 use embassy_net::udp::{PacketMetadata, UdpSocket};
+use nucleo_h723zg_udp_echo::{MAX_DATAGRAM_SIZE, UDP_ECHO_PORT, echo_payload};
 
-// Port 7 is the traditional UDP echo protocol port.
-const UDP_ECHO_PORT: u16 = 7;
-// 1536 bytes comfortably holds a normal Ethernet-frame-sized UDP payload.
-const MAX_DATAGRAM_SIZE: usize = 1536;
 // Metadata entries form small fixed-size receive/transmit packet queues.
 const PACKET_SLOTS: usize = 4;
 
@@ -61,10 +58,15 @@ pub async fn run(stack: Stack<'static>) -> ! {
             }
         };
 
-        // `&payload[..length]` is a borrowed slice containing exactly the
+        // `echo_payload` returns a borrowed slice containing exactly the
         // received bytes, not the unused remainder of the 1536-byte array.
+        let Some(reply) = echo_payload(&payload, length) else {
+            warn!("UDP receive length exceeds payload buffer");
+            continue;
+        };
+
         // Replying to `remote` means clients may use any source port.
-        if let Err(error) = socket.send_to(&payload[..length], remote).await {
+        if let Err(error) = socket.send_to(reply, remote).await {
             warn!("UDP send error: {:?}", error);
             continue;
         }

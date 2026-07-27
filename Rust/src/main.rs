@@ -23,16 +23,12 @@ use embassy_stm32::eth::{Ethernet, GenericPhy, PacketQueue, Sma};
 use embassy_stm32::gpio::{Level, Output, Speed};
 use embassy_stm32::peripherals::{ETH, ETH_SMA};
 use embassy_stm32::{Config, bind_interrupts, eth};
+use nucleo_h723zg_udp_echo::MAC_ADDRESS;
 use static_cell::StaticCell;
 // Importing these crates as `_` keeps their symbols linked even though we do
 // not call them directly. `defmt-rtt` transports logs through the debugger,
 // and `panic-probe` reports panics using that logging channel.
 use {defmt_rtt as _, panic_probe as _};
-
-// A MAC address identifies an Ethernet interface on the local network.
-// The first byte marks this as a locally administered address. It is fine for
-// one development board, but multiple boards must use different addresses.
-const MAC_ADDRESS: [u8; 6] = [0x02, 0x00, 0x00, 0x00, 0x00, 0x00];
 
 // This macro connects the STM32 `ETH` interrupt to Embassy's Ethernet driver
 // at compile time. `Irqs` is a zero-sized proof that the correct handler was

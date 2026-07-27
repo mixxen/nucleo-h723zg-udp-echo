@@ -21,6 +21,25 @@
             ]
         },
         {
+            "label": "Rust: run unit tests",
+            "type": "process",
+            "command": "cargo",
+            "args": [
+                "test",
+                "--locked",
+                "--lib",
+                "--target",
+                "x86_64-pc-windows-msvc"
+            ],
+            "options": {
+                "cwd": "${workspaceFolder}"
+            },
+            "group": "test",
+            "problemMatcher": [
+                "$rustc"
+            ]
+        },
+        {
             "label": "Rust: flash board",
             "type": "process",
             "command": "powershell.exe",

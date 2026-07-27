@@ -11,6 +11,7 @@ use embassy_time::{Duration, Timer};
 // `heapless::Vec` has fixed capacity and performs no heap allocation, making
 // its memory use predictable on a microcontroller.
 use heapless::Vec;
+use nucleo_h723zg_udp_echo::{FALLBACK_ADDRESS, FALLBACK_GATEWAY, FALLBACK_PREFIX_LENGTH};
 
 // Give a DHCP server 30 seconds to assign an address before using the fallback.
 const DHCP_TIMEOUT: Duration = Duration::from_secs(30);
@@ -58,8 +59,11 @@ pub async fn supervise(
                 // `Ipv4Cidr` stores both an address and its prefix length.
                 // A /24 prefix corresponds to netmask 255.255.255.0.
                 stack.set_config_v4(ConfigV4::Static(StaticConfigV4 {
-                    address: Ipv4Cidr::new(Ipv4Address::new(192, 168, 0, 10), 24),
-                    gateway: Some(Ipv4Address::new(192, 168, 0, 1)),
+                    address: Ipv4Cidr::new(
+                        Ipv4Address::from(FALLBACK_ADDRESS),
+                        FALLBACK_PREFIX_LENGTH,
+                    ),
+                    gateway: Some(Ipv4Address::from(FALLBACK_GATEWAY)),
                     // DNS is unnecessary for an echo server because it never
                     // resolves host names.
                     dns_servers: Vec::new(),
