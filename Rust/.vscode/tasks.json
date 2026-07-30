@@ -2,6 +2,22 @@
     "version": "2.0.0",
     "tasks": [
         {
+            "label": "Rust: provision SSH keys",
+            "type": "process",
+            "command": "powershell.exe",
+            "args": [
+                "-NoProfile",
+                "-ExecutionPolicy",
+                "Bypass",
+                "-File",
+                "${workspaceFolder}\\tools\\provision_ssh.ps1"
+            ],
+            "options": {
+                "cwd": "${workspaceFolder}"
+            },
+            "problemMatcher": []
+        },
+        {
             "label": "Rust: build release",
             "type": "process",
             "command": "cargo",
@@ -12,6 +28,9 @@
             "options": {
                 "cwd": "${workspaceFolder}"
             },
+            "dependsOn": [
+                "Rust: provision SSH keys"
+            ],
             "group": {
                 "kind": "build",
                 "isDefault": true
@@ -27,7 +46,11 @@
             "args": [
                 "test",
                 "--locked",
-                "--lib",
+                "--no-default-features",
+                "--features",
+                "host-tests",
+                "--test",
+                "host",
                 "--target",
                 "x86_64-pc-windows-msvc"
             ],
@@ -49,6 +72,25 @@
                 "Bypass",
                 "-File",
                 "${workspaceFolder}\\tools\\flash.ps1"
+            ],
+            "options": {
+                "cwd": "${workspaceFolder}"
+            },
+            "dependsOn": [
+                "Rust: provision SSH keys"
+            ],
+            "problemMatcher": []
+        },
+        {
+            "label": "Rust: connect with SSH",
+            "type": "process",
+            "command": "ssh.exe",
+            "args": [
+                "-i",
+                "${workspaceFolder}\\.ssh\\client_ed25519",
+                "-p",
+                "2222",
+                "board@${input:boardIp}"
             ],
             "options": {
                 "cwd": "${workspaceFolder}"

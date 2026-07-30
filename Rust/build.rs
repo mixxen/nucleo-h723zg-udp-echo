@@ -1,34 +1,66 @@
-//! Cargo build script for the firmware.
+//! Converts locally provisioned SSH key files into private firmware constants.
 //!
-//! Unlike the firmware under `src/`, a build script runs on the Windows host
-//! while Cargo is compiling. It can therefore use `std`, files, and environment
-//! variables. Its job here is to make the custom memory map available to the
-//! embedded linker.
+//! The source repository contains no private keys. `tools/provision_ssh.ps1`
+//! creates them under the Git-ignored `.ssh` directory. Keeping the conversion
+//! here also means application code only has to work with fixed-size byte
+//! arrays, which is natural in a `no_std` firmware.
 
-use std::env;
-use std::fs::File;
-use std::io::Write;
-use std::path::PathBuf;
+use std::{env, fs, path::Path};
+
+const KEY_BYTES: usize = 32;
+
+fn read_hex_key(path: &Path) -> [u8; KEY_BYTES] {
+    let text = fs::read_to_string(path).unwrap_or_else(|error| {
+        panic!(
+            "cannot read {} ({error}); run tools/provision_ssh.ps1 first",
+            path.display()
+        )
+    });
+    let text = text.trim();
+    assert_eq!(
+        text.len(),
+        KEY_BYTES * 2,
+        "{} must contain exactly {} hexadecimal characters",
+        path.display(),
+        KEY_BYTES * 2
+    );
+
+    let mut bytes = [0; KEY_BYTES];
+    for (index, slot) in bytes.iter_mut().enumerate() {
+        let start = index * 2;
+        *slot = u8::from_str_radix(&text[start..start + 2], 16)
+            .unwrap_or_else(|_| panic!("{} contains invalid hexadecimal", path.display()));
+    }
+    bytes
+}
 
 fn main() {
-    // Cargo gives each build a private output directory through `OUT_DIR`.
-    // Copy the checked-in linker memory map there so the linker can discover
-    // it without depending on the caller's current working directory.
-    let out = PathBuf::from(env::var_os("OUT_DIR").expect("OUT_DIR is set by Cargo"));
-    File::create(out.join("memory.x"))
-        .expect("create memory.x")
-        .write_all(include_bytes!("memory.x"))
-        .expect("write memory.x");
+    let manifest = env::var_os("CARGO_MANIFEST_DIR").expect("Cargo sets CARGO_MANIFEST_DIR");
+    let key_directory = Path::new(&manifest).join(".ssh");
+    let host_key_path = key_directory.join("host_ed25519.seed");
+    let authorized_key_path = key_directory.join("authorized_ed25519.hex");
 
-    // Lines prefixed with `cargo:` are instructions consumed by Cargo:
-    // - add OUT_DIR to the linker's file search path;
-    // - rerun this script if memory.x changes;
-    // - avoid large page-alignment gaps with `--nmagic`;
-    // - use cortex-m-rt's `link.x` layout; and
-    // - include defmt's logging metadata layout.
-    println!("cargo:rustc-link-search={}", out.display());
-    println!("cargo:rerun-if-changed=memory.x");
-    println!("cargo:rustc-link-arg-bins=--nmagic");
-    println!("cargo:rustc-link-arg-bins=-Tlink.x");
-    println!("cargo:rustc-link-arg-bins=-Tdefmt.x");
+    println!("cargo:rerun-if-changed={}", host_key_path.display());
+    println!("cargo:rerun-if-changed={}", authorized_key_path.display());
+
+    // Host-only tests do not compile the firmware or use SSH secrets. Supplying
+    // placeholders here keeps those tests runnable from a fresh clone before
+    // the developer provisions keys.
+    let firmware_enabled = env::var_os("CARGO_FEATURE_FIRMWARE").is_some();
+    let (host_key, authorized_key) = if firmware_enabled {
+        (
+            read_hex_key(&host_key_path),
+            read_hex_key(&authorized_key_path),
+        )
+    } else {
+        ([0; KEY_BYTES], [0; KEY_BYTES])
+    };
+
+    let generated = format!(
+        "pub const SSH_HOST_KEY_SEED: [u8; 32] = {host_key:?};\n\
+         pub const SSH_AUTHORIZED_KEY: [u8; 32] = {authorized_key:?};\n"
+    );
+    let output =
+        Path::new(&env::var_os("OUT_DIR").expect("Cargo sets OUT_DIR")).join("ssh_keys.rs");
+    fs::write(output, generated).expect("write generated SSH constants");
 }

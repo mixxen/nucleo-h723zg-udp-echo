@@ -13,6 +13,12 @@ pub const MAC_ADDRESS: [u8; 6] = [0x02, 0x00, 0x00, 0x00, 0x00, 0x00];
 /// UDP port assigned to the traditional echo protocol.
 pub const UDP_ECHO_PORT: u16 = 7;
 
+/// Unprivileged TCP port used by the embedded SSH server.
+pub const SSH_PORT: u16 = 2222;
+
+/// The single account accepted by the SSH service.
+pub const SSH_USERNAME: &str = "board";
+
 /// Storage reserved for one received UDP datagram.
 pub const MAX_DATAGRAM_SIZE: usize = 1536;
 
@@ -30,51 +36,35 @@ pub fn echo_payload(buffer: &[u8], received_length: usize) -> Option<&[u8]> {
     buffer.get(..received_length)
 }
 
-#[cfg(test)]
-mod tests {
-    use super::*;
+/// A command understood by the small SSH management shell.
+///
+/// The variants borrow text from the input line. No heap allocation or copy is
+/// necessary, and the caller cannot accidentally retain a command after its
+/// input buffer is reused.
+#[derive(Debug, PartialEq, Eq)]
+pub enum SshCommand<'a> {
+    Help,
+    Status,
+    Echo(&'a str),
+    Exit,
+    Unknown(&'a str),
+}
 
-    #[test]
-    fn empty_datagram_produces_an_empty_reply() {
-        assert_eq!(echo_payload(&[0xaa; 8], 0), Some(&[][..]));
-    }
-
-    #[test]
-    fn reply_contains_only_received_bytes() {
-        let buffer = [1, 2, 3, 4, 0, 0];
-        assert_eq!(echo_payload(&buffer, 4), Some(&[1, 2, 3, 4][..]));
-    }
-
-    #[test]
-    fn full_receive_buffer_is_valid() {
-        let buffer = [0x5a; MAX_DATAGRAM_SIZE];
-        assert_eq!(echo_payload(&buffer, MAX_DATAGRAM_SIZE), Some(&buffer[..]));
-    }
-
-    #[test]
-    fn length_beyond_buffer_is_rejected() {
-        assert_eq!(echo_payload(&[1, 2, 3], 4), None);
-    }
-
-    #[test]
-    fn mac_address_is_local_and_unicast() {
-        assert_eq!(MAC_ADDRESS[0] & 0b0000_0010, 0b0000_0010);
-        assert_eq!(MAC_ADDRESS[0] & 0b0000_0001, 0);
-    }
-
-    #[test]
-    fn fallback_gateway_is_in_the_same_24_bit_subnet() {
-        assert_eq!(FALLBACK_PREFIX_LENGTH, 24);
-        assert_eq!(FALLBACK_ADDRESS[..3], FALLBACK_GATEWAY[..3]);
-        assert_ne!(FALLBACK_ADDRESS, FALLBACK_GATEWAY);
-    }
-
-    #[test]
-    fn buffer_accepts_a_standard_unfragmented_udp_payload() {
-        const ETHERNET_MTU: usize = 1500;
-        const IPV4_HEADER: usize = 20;
-        const UDP_HEADER: usize = 8;
-
-        assert!(MAX_DATAGRAM_SIZE >= ETHERNET_MTU - IPV4_HEADER - UDP_HEADER);
+/// Parse one command line received through SSH.
+///
+/// This pure function is shared by the firmware and host tests. Keeping
+/// protocol-independent decisions here makes them easy to exercise without an
+/// STM32, Ethernet cable, or SSH client.
+pub fn parse_ssh_command(line: &str) -> SshCommand<'_> {
+    let line = line.trim();
+    match line {
+        "help" => SshCommand::Help,
+        "status" => SshCommand::Status,
+        "exit" | "logout" => SshCommand::Exit,
+        "echo" => SshCommand::Echo(""),
+        _ => match line.strip_prefix("echo ") {
+            Some(text) => SshCommand::Echo(text),
+            None => SshCommand::Unknown(line),
+        },
     }
 }

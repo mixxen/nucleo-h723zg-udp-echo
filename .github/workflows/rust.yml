@@ -27,8 +27,13 @@ jobs:
       - name: Check formatting
         run: cargo fmt --check
 
-      - name: Run host unit tests
-        run: cargo test --locked --lib --target x86_64-unknown-linux-gnu
+      - name: Run host tests
+        run: cargo test --locked --no-default-features --features host-tests --test host --target x86_64-unknown-linux-gnu
+
+      # CI keys are disposable and exist only to link the complete firmware.
+      - name: Provision disposable SSH build keys
+        shell: pwsh
+        run: ./tools/provision_ssh.ps1
 
       - name: Lint embedded firmware
         run: cargo clippy --locked --target thumbv7em-none-eabihf -- -D warnings

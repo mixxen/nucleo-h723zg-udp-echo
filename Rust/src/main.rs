@@ -2,7 +2,7 @@
 //!
 //! Embedded programs do not have an operating system to initialize hardware
 //! or schedule threads for them. This file configures the MCU, constructs the
-//! Ethernet/network objects, and starts three cooperative async tasks.
+//! Ethernet/network objects, and starts four cooperative async tasks.
 
 // `no_std` replaces Rust's normal standard library with `core`. The standard
 // library expects an operating system, files, threads, and heap allocation,
@@ -14,15 +14,20 @@
 
 // Each module owns one distinct part of the application.
 mod network;
+mod ssh_server;
 mod udp_echo;
 
+use core::cell::RefCell;
+
+use critical_section::Mutex;
 use defmt::{info, unwrap};
 use embassy_executor::Spawner;
 use embassy_net::StackResources;
 use embassy_stm32::eth::{Ethernet, GenericPhy, PacketQueue, Sma};
 use embassy_stm32::gpio::{Level, Output, Speed};
-use embassy_stm32::peripherals::{ETH, ETH_SMA};
-use embassy_stm32::{Config, bind_interrupts, eth};
+use embassy_stm32::peripherals::{ETH, ETH_SMA, RNG};
+use embassy_stm32::rng::Rng;
+use embassy_stm32::{Config, bind_interrupts, eth, rng};
 use nucleo_h723zg_udp_echo::MAC_ADDRESS;
 use static_cell::StaticCell;
 // Importing these crates as `_` keeps their symbols linked even though we do
@@ -35,6 +40,7 @@ use {defmt_rtt as _, panic_probe as _};
 // installed; it is passed to `Ethernet::new` later.
 bind_interrupts!(struct Irqs {
     ETH => eth::InterruptHandler;
+    RNG => rng::InterruptHandler<RNG>;
 });
 
 // The complete generic Ethernet type is long, so this alias makes the task
@@ -46,8 +52,17 @@ type EthernetDevice = Ethernet<'static, ETH, GenericPhy<Sma<'static, ETH_SMA>>>;
 // `StaticCell` safely initializes static memory exactly once, without a heap.
 // The packet queue contains four receive and four transmit DMA descriptors.
 static PACKET_QUEUE: StaticCell<PacketQueue<4, 4>> = StaticCell::new();
-// `StackResources<4>` reserves bookkeeping for up to four network sockets.
+// `StackResources<4>` covers DHCP, UDP echo, SSH TCP, and one spare socket.
 static NETWORK_RESOURCES: StaticCell<StackResources<4>> = StaticCell::new();
+
+// Sunset obtains cryptographic randomness through the `getrandom` crate's
+// custom embedded hook. The actual entropy comes from the STM32 hardware RNG,
+// kept here after its peripheral ownership token is consumed.
+static HARDWARE_RNG: Mutex<RefCell<Option<Rng<'static, RNG>>>> = Mutex::new(RefCell::new(None));
+
+// Register our function as the entropy source for Sunset and its cryptographic
+// dependencies on this otherwise unsupported bare-metal target.
+getrandom::register_custom_getrandom!(hardware_random);
 
 // This task continuously drives the network stack. The return type `!`
 // ("never") documents that a successful network runner does not terminate.
@@ -93,7 +108,15 @@ async fn main(spawner: Spawner) -> ! {
     // for every peripheral and pin. Rust then prevents two drivers from
     // accidentally controlling the same piece of hardware.
     let peripherals = embassy_stm32::init(config);
-    info!("Rust NUCLEO-H723ZG UDP echo server booting");
+    info!("Rust NUCLEO-H723ZG UDP echo and SSH server booting");
+
+    // HSI48 is enabled by Embassy's default H7 clock configuration and feeds
+    // the hardware RNG. Install the driver before Sunset can request random
+    // padding, ephemeral keys, or key-exchange nonces.
+    let hardware_rng = Rng::new(peripherals.RNG, Irqs);
+    critical_section::with(|section| {
+        HARDWARE_RNG.borrow(section).replace(Some(hardware_rng));
+    });
 
     // PE1 is the network-ready LED; PB14 is the error/waiting LED.
     let ready_led = Output::new(peripherals.PE1, Level::Low, Speed::Low);
@@ -141,8 +164,23 @@ async fn main(spawner: Spawner) -> ! {
     spawner.spawn(unwrap!(net_task(runner)));
     spawner.spawn(unwrap!(network::supervise(stack, ready_led, error_led)));
     spawner.spawn(unwrap!(udp_echo::run(stack)));
+    spawner.spawn(unwrap!(ssh_server::run(stack)));
 
     // All useful work now lives in spawned tasks. Keep `main` alive forever
     // without consuming CPU; the executor wakes other tasks on events/timers.
     core::future::pending().await
+}
+
+/// Supply Sunset/getrandom with bytes from the STM32 hardware RNG.
+///
+/// The critical section prevents two callers from mutably borrowing the
+/// peripheral simultaneously; Embassy runs this firmware on one executor, so
+/// the short synchronous hardware reads do not contend with another CPU thread.
+fn hardware_random(destination: &mut [u8]) -> Result<(), getrandom::Error> {
+    critical_section::with(|section| {
+        let mut slot = HARDWARE_RNG.borrow(section).borrow_mut();
+        let rng = slot.as_mut().ok_or(getrandom::Error::UNEXPECTED)?;
+        rng.fill_bytes(destination);
+        Ok(())
+    })
 }

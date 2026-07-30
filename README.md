@@ -1,4 +1,4 @@
-# NUCLEO-H723ZG LwIP UDP Echo Server
+# NUCLEO-H723ZG UDP Echo Server
 
 This guide describes the Windows and Visual Studio Code setup used to build,
 flash, and test this example on a NUCLEO-H723ZG.
@@ -16,6 +16,10 @@ The board:
 - obtains an IPv4 address from DHCP;
 - listens for UDP datagrams on port 7; and
 - echoes each datagram to UDP port 7 on the client.
+
+The Rust version also runs a public-key-authenticated SSH management shell on
+TCP port 2222. It exposes a small command set (`help`, `status`, `echo`, and
+`exit`) rather than an operating-system shell.
 
 The firmware uses the locally administered MAC address
 `02-00-00-00-00-00`. If DHCP fails, it eventually falls back to
@@ -35,19 +39,21 @@ Embassy provides STM32 hardware drivers, an embedded async executor, and the
 LAN8742A PHY -> STM32 Ethernet driver -> Embassy network runner
                                              |
                                       shared Stack handle
-                                       /            \
-                              Link/DHCP task     UDP echo task
-                              LEDs + fallback    receive -> send
+                                /             |             \
+                       Link/DHCP task    UDP echo task     SSH task
+                       LEDs + fallback   receive -> send   auth -> command
 ```
 
 At startup, `main.rs` configures the clocks, takes ownership of the STM32
-peripherals, builds the Ethernet driver, and starts three cooperative async
+peripherals, builds the Ethernet driver, and starts four cooperative async
 tasks. One task drives the network stack, one supervises link and DHCP state,
-and one serves UDP port 7. The Ethernet interrupt wakes network work when a
-packet arrives; a task waiting at `.await` consumes no CPU.
+one serves UDP port 7, and one serves SSH on TCP port 2222. Sunset provides
+the SSH protocol and cryptography; the STM32 hardware RNG supplies entropy for
+key exchange. The Ethernet interrupt wakes network work when a packet arrives;
+a task waiting at `.await` consumes no CPU.
 
 Memory is fixed at compile time. DMA descriptors and network resources use
-`StaticCell`, while the UDP socket owns bounded packet and payload arrays.
+`StaticCell`, while the UDP and SSH sockets own bounded packet and payload arrays.
 There is no heap, allocator, garbage collector, OS thread, or dynamically
 allocated task.
 
@@ -60,15 +66,35 @@ See [the complete Rust architecture and Embassy primer](Rust/README.md#architect
 for the request data path, task lifecycle, and a C/C++-to-Rust mental-model
 table.
 
+### Connect to the Rust SSH service
+
+SSH keys are embedded at build time but are never committed. From `Rust/`,
+provision a persistent board host key and a local client key, then flash:
+
+```powershell
+powershell -ExecutionPolicy Bypass -File .\tools\provision_ssh.ps1
+powershell -ExecutionPolicy Bypass -File .\tools\flash.ps1
+```
+
+Connect using the address assigned by DHCP:
+
+```powershell
+ssh -i .\.ssh\client_ed25519 -p 2222 board@BOARD_IP
+```
+
+The service accepts only the provisioned Ed25519 key; it has no password
+login. See [the detailed SSH setup and security notes](Rust/README.md#ssh-management-service).
+
 ### Rust testing strategy
 
-Hardware-independent production rules live in `Rust/src/lib.rs` and are unit
-tested on an ordinary Windows or Linux host. This includes checked UDP payload
+Hardware-independent production rules live in `Rust/src/lib.rs` and are
+tested from `Rust/tests/host.rs` on an ordinary Windows or Linux host. This
+includes checked UDP payload
 boundaries, MAC-address properties, fallback-network consistency, and payload
 capacity. The STM32/Embassy dependencies are compiled only for ARM, so host
 tests do not need an emulator or attached board.
 
-The workflow in `.github/workflows/rust.yml` runs those unit tests for every
+The workflow in `.github/workflows/rust.yml` runs those host tests for every
 push and pull request. It also checks formatting, runs strict Clippy against
 the embedded target, and builds the release firmware. Physical Ethernet, PHY,
 DHCP, and interrupt behavior remain covered by the board-level UDP test.

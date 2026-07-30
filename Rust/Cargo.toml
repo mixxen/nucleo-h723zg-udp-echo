@@ -4,6 +4,17 @@ version = "0.1.0"
 edition = "2024"
 publish = false
 
+[features]
+# Host tests are opt-in so Rust Analyzer does not try to build Rust's standard
+# test harness for the bare-metal ARM target.
+default = ["firmware"]
+firmware = []
+host-tests = []
+
+[lib]
+test = false
+bench = false
+
 # Embedded firmware has no `libtest` harness on the ARM target. Explicitly
 # disable Cargo's host-style test and benchmark targets for this binary.
 [[bin]]
@@ -11,6 +22,12 @@ name = "nucleo-h723zg-udp-echo"
 path = "src/main.rs"
 test = false
 bench = false
+required-features = ["firmware"]
+
+[[test]]
+name = "host"
+path = "tests/host.rs"
+required-features = ["host-tests"]
 
 [target.'cfg(target_arch = "arm")'.dependencies]
 embassy-stm32 = { version = "0.6.0", features = [
@@ -35,20 +52,28 @@ embassy-net = { version = "0.9.1", features = [
     "dhcpv4",
     "medium-ethernet",
     "proto-ipv4",
+    "tcp",
     "udp",
     "auto-icmp-echo-reply",
 ] }
+embassy-sync = "0.8.0"
+embedded-io-async = "0.7.0"
+ed25519-dalek = { version = "2.2.0", default-features = false, features = ["zeroize"] }
 
 cortex-m = { version = "0.7.7", features = [
     "inline-asm",
     "critical-section-single-core",
 ] }
 cortex-m-rt = "0.7.5"
+critical-section = "1.2.0"
 defmt = "1.0.1"
 defmt-rtt = "1.0.0"
+getrandom = { version = "0.2.17", default-features = false, features = ["custom"] }
 heapless = { version = "0.9.1", default-features = false }
 panic-probe = { version = "1.0.0", features = ["print-defmt"] }
 static_cell = "2.1.1"
+sunset = { version = "0.5.0", default-features = false, features = ["embedded-io"] }
+sunset-async = { version = "0.5.0", default-features = false }
 
 [profile.dev]
 codegen-units = 1
