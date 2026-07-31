@@ -4,6 +4,10 @@ This is a standalone `no_std` Rust implementation of the adjacent STM32Cube
 LwIP example. It uses Embassy for the STM32 Ethernet driver, DHCP, IPv4, ICMP,
 and UDP. The C project is unchanged.
 
+For one linear, copy-and-paste walkthrough from compilation through an
+Ethernet firmware update, see the main README's
+[end-to-end Rust demo](../README.md#end-to-end-rust-demo).
+
 The firmware:
 
 - runs the STM32H723 at 400 MHz with AHB at 200 MHz;
@@ -12,7 +16,8 @@ The firmware:
 - falls back to `192.168.0.10/24` after 30 seconds without DHCP;
 - answers ICMP echo requests;
 - listens on UDP port 7 and echoes to the sender's actual source port;
-- runs a public-key-authenticated SSH management service on TCP port 2222; and
+- runs a public-key-authenticated SSH management service on TCP port 2222;
+- stages signed, rollback-capable firmware through an isolated SSH subsystem;
 - uses LED2 for network-ready and LED3 for disconnected/not-configured.
 
 ## Architecture
@@ -34,28 +39,37 @@ LAN8742A PHY <---RMII---> STM32 Ethernet driver
                    /              |               \
                   v               v                v
        Link/DHCP supervisor  UDP echo task      SSH task
-       LEDs + fallback       receive -> send    auth -> command
+       LEDs + fallback       receive -> send    auth -> command/update
 ```
 
 Startup and runtime proceed as follows:
 
-1. `main` configures the STM32 clock tree and takes ownership of the GPIO,
+1. On every reset, MCUboot verifies the signed primary image and performs any
+   requested trial swap or rollback before entering Rust at `0x08020200`.
+2. MCUboot relocates the vector table, flushes and disables its caches, clears
+   its NVIC state, and jumps with global interrupts masked. `main` configures
+   the STM32 clock tree and takes ownership of the GPIO,
    Ethernet, and PHY-management peripherals.
-2. It constructs the Ethernet driver with statically allocated DMA packet
+3. After `embassy_stm32::init` has installed the application's clock, timer,
+   vector, and interrupt configuration, Rust explicitly enables global
+   interrupts. This handoff is essential: ordinary instructions can run with
+   `PRIMASK` set, but async timers and Ethernet tasks cannot wake.
+4. It constructs the Ethernet driver with statically allocated DMA packet
    descriptors and the board's RMII pins.
-3. `embassy_net::new` creates a network `Stack` and a `Runner`. The stack is
+5. `embassy_net::new` creates a network `Stack` and a `Runner`. The stack is
    the application-facing handle; the runner performs packet and protocol
    processing.
-4. Embassy's executor starts four tasks:
+6. Embassy's executor starts four tasks:
    - the network runner, which drives Ethernet, ARP, IPv4, ICMP, DHCP, UDP, and TCP;
    - the supervisor, which watches link/DHCP state and controls the LEDs;
    - the UDP server, which waits for datagrams on port 7 and echoes them; and
    - the SSH server, which accepts one TCP connection, performs Sunset's SSH
-     handshake and Ed25519 authentication, then runs a management command.
-5. When Ethernet hardware raises an interrupt, Embassy's handler wakes the
+     handshake and Ed25519 authentication, then runs a management command or
+     the isolated firmware-update protocol.
+7. When Ethernet hardware raises an interrupt, Embassy's handler wakes the
    relevant async work. A task waiting at `.await` consumes no CPU until its
    event, packet, or timer is ready.
-6. The tasks run cooperatively on one MCU core. There are no OS threads and no
+8. The tasks run cooperatively on one MCU core. There are no OS threads and no
    preemptive task switching between these application tasks.
 
 The data path for one request is:
@@ -72,6 +86,15 @@ TCP stream -> Sunset transport -> authenticated SSH channel
     -> command parser -> bounded response -> encrypted TCP stream
 ```
 
+A firmware update follows a deliberately separate branch after SSH
+authentication:
+
+```text
+signed .bin -> firmware-update subsystem -> bounded flash writer
+    -> secondary slot -> SHA-256 read-back -> MCUboot test marker
+    -> reset -> signature verification -> trial boot -> confirm or roll back
+```
+
 Sunset is an embedded `no_std` SSH implementation. It owns the SSH state
 machine and cryptography while Embassy owns TCP and task scheduling. The
 application supplies fixed buffers, a persistent host key, one authorized
@@ -81,6 +104,13 @@ All important memory is bounded at compile time. `StaticCell` provides
 one-time initialization for the DMA queue and network resources. The UDP task
 owns fixed arrays for socket metadata and payload buffers. There is no heap,
 allocator, `malloc`, or garbage collector.
+
+The application owns the STM32 internal-flash peripheral just as it owns
+Ethernet. Only the SSH updater receives a mutable borrow of that driver, so
+ordinary commands cannot write flash and two uploads cannot run concurrently.
+Addresses and maximum lengths are constants tested on the host. Rust slice
+checks still apply at every received chunk, while MCUboot provides an
+independent authenticity boundary at the next reset.
 
 ### Rust and Embassy mental model
 
@@ -202,7 +232,7 @@ The linker intentionally places all writable sections in AXI SRAM beginning
 at `0x24000000`. Ethernet DMA cannot access the STM32H7's DTCM at
 `0x20000000`.
 
-## Flash
+## Factory flash and recovery
 
 Connect the board's ST-LINK USB port, then run the **Rust: flash board** VS
 Code task or:
@@ -211,13 +241,19 @@ Code task or:
 powershell -ExecutionPolicy Bypass -File .\tools\flash.ps1
 ```
 
-The script builds the release image, finds the xPack OpenOCD installation, and
-programs through the onboard ST-LINK. Success ends with:
+The script builds pinned MCUboot, builds and signs the Rust application,
+erases stale swap metadata, and programs both images through the onboard
+ST-LINK. This is the initial provisioning and unbricking path; subsequent
+application versions can use Ethernet. Success ends with:
 
 ```text
-** Verified OK **
-Firmware programmed, verified, reset, and started.
+MCUboot and signed Rust firmware programmed, verified, and started.
 ```
+
+The bootloader occupies `0x08000000..0x0801ffff`. The signed application slot
+starts at `0x08020000`, with the Rust vector table after MCUboot's 512-byte
+header at `0x08020200`. Do not use the old standalone-ELF programming command:
+it would bypass the signed boot layout.
 
 ## Find and connect to the board
 
@@ -294,6 +330,81 @@ exit-status operation, so `ssh ... status` returns the output but desktop
 OpenSSH may report that the remote closed the connection and use a nonzero
 process exit code.
 
+## Signed firmware updates over Ethernet
+
+MCUboot and SSH solve different security problems. SSH authenticates the
+operator and encrypts the transfer. MCUboot contains only the firmware-signing
+public key and independently rejects an altered or incorrectly signed image,
+even if it arrived through a valid SSH session. Never reuse the SSH login key
+as the firmware-signing key.
+
+The 1 MiB internal flash is divided as follows:
+
+| Region | Address | Size | Purpose |
+|---|---:|---:|---|
+| MCUboot | `0x08000000` | 128 KiB | Signature check, swap, rollback |
+| Primary slot | `0x08020000` | 384 KiB | Running signed image plus trailer sector |
+| Secondary slot | `0x08080000` | 512 KiB | Swap workspace, staged image, trailer |
+
+STM32H723 erase sectors are 128 KiB. MCUboot's primary trailer therefore owns
+the final primary sector, leaving an effective signed-image limit of 256 KiB.
+For offset swap, the first secondary sector is workspace and uploaded bytes
+begin at `0x080A0000`.
+
+### Build a signed release
+
+Choose a version newer than the currently installed image:
+
+```powershell
+powershell -ExecutionPolicy Bypass -File .\tools\build-signed.ps1 -Version 0.1.2
+```
+
+The output is `artifacts\firmware-signed.bin`. The script checks the Ed25519
+signature and rejects an image larger than the effective 256 KiB area.
+`Bootloader\root-ed25519.pem` is a Git-ignored development private key; keep a
+production signing key offline or in an appropriate signing service.
+
+### Upload through SSH
+
+Use the same authorized client key as the management shell:
+
+```powershell
+powershell -ExecutionPolicy Bypass -File .\tools\ethernet-flash.ps1 `
+    -HostName 192.168.68.57 `
+    -KeyPath .\.ssh\client_ed25519
+```
+
+The client sends a 44-byte header containing `FWUP`, protocol version 1, the
+little-endian image length, and SHA-256. The board then:
+
+1. rejects invalid lengths before touching flash;
+2. erases only the secondary partition;
+3. receives and programs 32-byte-aligned chunks;
+4. checks the transfer SHA-256;
+5. hashes the complete flash read-back;
+6. writes MCUboot test metadata, with activation magic last; and
+7. reports success and resets.
+
+The STM32H723 has single-bank flash, so execution and networking pause briefly
+during sector erase and programming. The client waits for `READY` before
+sending the body, and TCP backpressure bounds buffered data.
+
+After reset, MCUboot verifies the image's Ed25519 signature and performs a test
+swap. A new application that reaches clock, memory, flash, and peripheral
+initialization writes MCUboot's `image_ok` flag. If it crashes or resets before
+that checkpoint, MCUboot restores the previous image on the following boot.
+
+An interrupted upload is safe to retry from byte zero. Partial secondary data
+has no final activation magic and cannot replace the primary image. ST-LINK
+remains necessary to replace MCUboot itself or recover when both application
+slots are damaged.
+
+For a controlled hardware rollback test only, `build-signed.ps1
+-RollbackTest` enables a feature that deliberately withholds `image_ok`.
+Clearly label and use that artifact only for acceptance testing: MCUboot should
+boot it once and restore the previously confirmed version after the next
+reset. Normal builds never enable this feature.
+
 ## Test
 
 ### Host tests
@@ -318,8 +429,10 @@ normal firmware commands to the ARM target. The host suite checks:
 - rejection of an invalid receive length;
 - locally administered/unicast MAC address bits;
 - fallback address and gateway subnet consistency; and
-- capacity for a standard unfragmented Ethernet/IPv4 UDP payload; and
-- SSH endpoint constants and management-command parsing.
+- capacity for a standard unfragmented Ethernet/IPv4 UDP payload;
+- SSH endpoint constants and management-command parsing;
+- firmware-header version, length, and reserved-field validation; and
+- MCUboot image magic, trailer offsets, and exact aligned trailer fixtures.
 
 These tests exercise deterministic application rules, not the Ethernet
 peripheral, PHY, interrupts, DHCP server, or physical network. Those remain
@@ -358,6 +471,16 @@ ping, returned a byte-identical UDP payload from port 7, authenticated the
 provisioned SSH client key, and served three consecutive SSH status sessions
 without disrupting UDP.
 
+The MCUboot/updater build was also exercised end to end on the same board.
+The Windows client uploaded signed version 0.1.8 over authenticated SSH,
+displayed progress, and returned normally after the board reset. MCUboot
+verified and installed it, the Rust health checkpoint programmed `image_ok`,
+DHCP restored `192.168.68.57`, SSH status passed, and all 25 binary UDP
+acceptance datagrams echoed byte-for-byte. Separate hardware tests also proved
+automatic rollback of an unconfirmed image and rejection of an image signed
+by an unknown key. Detailed evidence remains in
+`../ETHERNET_FIRMWARE_UPDATE_PLAN.md`.
+
 ## Source layout
 
 - `src/lib.rs`: hardware-independent constants and checked payload logic
@@ -366,9 +489,12 @@ without disrupting UDP.
 - `src/network.rs`: DHCP, static fallback, link state, and LEDs
 - `src/udp_echo.rs`: bounded-buffer UDP echo task
 - `src/ssh_server.rs`: Sunset authentication, channel handling, and commands
+- `src/firmware_update.rs`: bounded staging, read-back, activation, and confirmation
 - `build.rs`: converts provisioned key files into firmware constants
 - `../.github/workflows/rust.yml`: host tests and embedded build checks on GitHub
-- `memory.x`: conservative H723 flash and AXI SRAM layout
-- `tools/flash.ps1`: repeatable OpenOCD build/flash flow
+- `memory.x`: MCUboot primary-slot and AXI SRAM linker layout
+- `tools/flash.ps1`: MCUboot plus signed-app factory/recovery flash flow
+- `tools/build-signed.ps1`: signed, versioned MCUboot image packaging
+- `tools/ethernet-flash.ps1`: authenticated Windows Ethernet-update client
 - `tools/provision_ssh.ps1`: persistent host and authorized-client key setup
 - `tools/udp_echo_test.ps1`: host-side binary UDP acceptance test

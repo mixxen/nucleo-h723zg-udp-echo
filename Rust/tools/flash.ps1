@@ -1,36 +1,36 @@
 [CmdletBinding()]
 param(
-    [switch]$SkipBuild
+    [switch]$SkipBuild,
+    [ValidatePattern("^\d+\.\d+\.\d+(\+\d+)?$")]
+    [string]$Version = "0.1.0",
+    [string]$ZephyrWorkspace = (Join-Path $env:USERPROFILE "zephyrproject-v4.4.0")
 )
 
 $ErrorActionPreference = "Stop"
 $projectRoot = Split-Path -Parent $PSScriptRoot
+$repositoryRoot = Split-Path -Parent $projectRoot
 
 if (-not $SkipBuild) {
-    $cargo = Get-Command cargo -ErrorAction SilentlyContinue |
-        Select-Object -First 1 -ExpandProperty Source
-    if (-not $cargo) {
-        $cargo = Join-Path $env:USERPROFILE ".cargo\bin\cargo.exe"
-    }
-    if (-not (Test-Path -LiteralPath $cargo -PathType Leaf)) {
-        throw "Cargo was not found. Install Rust with rustup and restart VS Code."
+    & (Join-Path $repositoryRoot "Bootloader\tools\build-mcuboot.ps1") `
+        -ZephyrWorkspace $ZephyrWorkspace
+    if ($LASTEXITCODE -ne 0) {
+        throw "MCUboot build failed."
     }
 
-    Push-Location $projectRoot
-    try {
-        & $cargo build --release
-        if ($LASTEXITCODE -ne 0) {
-            throw "cargo build failed with exit code $LASTEXITCODE"
-        }
-    }
-    finally {
-        Pop-Location
+    & (Join-Path $PSScriptRoot "build-signed.ps1") `
+        -Version $Version `
+        -ZephyrWorkspace $ZephyrWorkspace
+    if ($LASTEXITCODE -ne 0) {
+        throw "Signed application build failed."
     }
 }
 
-$elf = Join-Path $projectRoot "target\thumbv7em-none-eabihf\release\nucleo-h723zg-udp-echo"
-if (-not (Test-Path -LiteralPath $elf -PathType Leaf)) {
-    throw "Firmware ELF not found at '$elf'. Run cargo build --release first."
+$bootloaderHex = Join-Path $repositoryRoot "Bootloader\build\zephyr\zephyr.hex"
+$signedApplication = Join-Path $projectRoot "artifacts\firmware-signed.bin"
+foreach ($requiredFile in @($bootloaderHex, $signedApplication)) {
+    if (-not (Test-Path -LiteralPath $requiredFile -PathType Leaf)) {
+        throw "Factory image component not found: '$requiredFile'"
+    }
 }
 
 $openOcdRoot = Join-Path $env:APPDATA "xPacks\@xpack-dev-tools\openocd"
@@ -42,16 +42,32 @@ if (-not $openOcd) {
     throw "OpenOCD was not found below '$openOcdRoot'. Install @xpack-dev-tools/openocd first."
 }
 
-$elfForOpenOcd = (Resolve-Path -LiteralPath $elf).Path.Replace("\", "/")
+$bootloaderForOpenOcd = (Resolve-Path -LiteralPath $bootloaderHex).Path.Replace("\", "/")
+$applicationForOpenOcd = (Resolve-Path -LiteralPath $signedApplication).Path.Replace("\", "/")
+
+# A factory install intentionally erases all internal flash so stale slot
+# trailers cannot request an unexpected swap. Subsequent releases use SSH and
+# touch only the secondary slot.
+$commands = @(
+    "init",
+    "reset halt",
+    "stm32h7x mass_erase 0",
+    "flash write_image {$bootloaderForOpenOcd}",
+    "verify_image {$bootloaderForOpenOcd}",
+    "flash write_image {$applicationForOpenOcd} 0x08020000 bin",
+    "verify_image {$applicationForOpenOcd} 0x08020000 bin",
+    "reset run",
+    "shutdown"
+) -join "; "
 
 & $openOcd `
     -f interface/stlink.cfg `
     -f target/stm32h7x.cfg `
     -c "adapter speed 3300" `
-    -c "program {$elfForOpenOcd} verify reset exit"
+    -c $commands
 
 if ($LASTEXITCODE -ne 0) {
     throw "OpenOCD failed with exit code $LASTEXITCODE"
 }
 
-Write-Host "Firmware programmed, verified, reset, and started."
+Write-Host "MCUboot and signed Rust firmware programmed, verified, and started."

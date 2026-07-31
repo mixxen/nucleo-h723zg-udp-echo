@@ -13,6 +13,7 @@
 #![no_main]
 
 // Each module owns one distinct part of the application.
+mod firmware_update;
 mod network;
 mod ssh_server;
 mod udp_echo;
@@ -22,8 +23,10 @@ use core::cell::RefCell;
 use critical_section::Mutex;
 use defmt::{info, unwrap};
 use embassy_executor::Spawner;
+use embassy_futures::yield_now;
 use embassy_net::StackResources;
 use embassy_stm32::eth::{Ethernet, GenericPhy, PacketQueue, Sma};
+use embassy_stm32::flash::Flash;
 use embassy_stm32::gpio::{Level, Output, Speed};
 use embassy_stm32::peripherals::{ETH, ETH_SMA, RNG};
 use embassy_stm32::rng::Rng;
@@ -108,7 +111,27 @@ async fn main(spawner: Spawner) -> ! {
     // for every peripheral and pin. Rust then prevents two drivers from
     // accidentally controlling the same piece of hardware.
     let peripherals = embassy_stm32::init(config);
+
+    // MCUboot masks all interrupts while cleaning up its own NVIC state, then
+    // intentionally leaves PRIMASK set when it jumps here. Embassy has now
+    // configured the application's clocks, timer, vector table, and interrupt
+    // handlers, so this is the boundary where the application takes ownership
+    // and may safely accept interrupts. Without this step, ordinary Rust code
+    // still runs, but async timers and Ethernet never wake their tasks.
+    //
+    // This is `unsafe` because enabling interrupts before their handlers and
+    // shared state are initialized could let one observe inconsistent state.
+    unsafe {
+        cortex_m::interrupt::enable();
+    }
+
     info!("Rust NUCLEO-H723ZG UDP echo and SSH server booting");
+
+    // Keep ownership of internal flash for trial confirmation and authenticated
+    // updates. It is handed to the SSH task only after the startup health
+    // checkpoint below.
+    #[cfg_attr(feature = "rollback-test", allow(unused_mut))]
+    let mut flash = Flash::new_blocking(peripherals.FLASH);
 
     // HSI48 is enabled by Embassy's default H7 clock configuration and feeds
     // the hardware RNG. Install the driver before Sunset can request random
@@ -164,7 +187,22 @@ async fn main(spawner: Spawner) -> ! {
     spawner.spawn(unwrap!(net_task(runner)));
     spawner.spawn(unwrap!(network::supervise(stack, ready_led, error_led)));
     spawner.spawn(unwrap!(udp_echo::run(stack)));
-    spawner.spawn(unwrap!(ssh_server::run(stack)));
+
+    // MCUboot leaves a one-byte "please confirm" flag erased during a trial
+    // boot. Yield several executor turns so the Ethernet runner and link
+    // supervisor are actually polled before declaring the image healthy.
+    // Unlike a timed delay, this checkpoint does not depend on a cable, DHCP,
+    // or even a working wall-clock timer. On a normal factory boot the trailer
+    // has no MCUboot magic and this call changes nothing.
+    for _ in 0..3 {
+        yield_now().await;
+    }
+    #[cfg(not(feature = "rollback-test"))]
+    firmware_update::confirm_running_trial(&mut flash);
+    #[cfg(feature = "rollback-test")]
+    defmt::warn!("rollback-test build: deliberately withholding MCUboot confirmation");
+
+    spawner.spawn(unwrap!(ssh_server::run(stack, flash)));
 
     // All useful work now lives in spawned tasks. Keep `main` alive forever
     // without consuming CPU; the executor wakes other tasks on events/timers.

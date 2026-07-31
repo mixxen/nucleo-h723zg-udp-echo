@@ -21,7 +21,7 @@ jobs:
       - name: Install Rust toolchain
         uses: dtolnay/rust-toolchain@stable
         with:
-          components: clippy, rustfmt
+          components: clippy, llvm-tools, rustfmt
           targets: thumbv7em-none-eabihf
 
       - name: Check formatting
@@ -40,3 +40,38 @@ jobs:
 
       - name: Build embedded firmware
         run: cargo build --locked --release
+
+      - name: Install disposable signing tools
+        run: python -m pip install --disable-pip-version-check imgtool==2.4.0
+
+      # This intentionally generates an ephemeral CI-only key. It proves that
+      # the release ELF can be converted, signed, verified, and kept within
+      # MCUboot's effective two-sector image budget without exposing a real key.
+      - name: Package and verify signed test image
+        run: |
+          mkdir -p artifacts
+          imgtool keygen --key "$RUNNER_TEMP/ci-ed25519.pem" --type ed25519
+          host_triple="$(rustc -vV | sed -n 's/^host: //p')"
+          llvm_objcopy="$(rustc --print sysroot)/lib/rustlib/$host_triple/bin/llvm-objcopy"
+          "$llvm_objcopy" \
+            -O binary \
+            target/thumbv7em-none-eabihf/release/nucleo-h723zg-udp-echo \
+            artifacts/firmware-unsigned.bin
+          imgtool sign \
+            --key "$RUNNER_TEMP/ci-ed25519.pem" \
+            --align 32 \
+            --max-align 32 \
+            --header-size 0x200 \
+            --pad-header \
+            --slot-size 0x60000 \
+            --max-sectors 4 \
+            --version 0.0.0+0 \
+            artifacts/firmware-unsigned.bin \
+            artifacts/firmware-signed.bin
+          imgtool verify --key "$RUNNER_TEMP/ci-ed25519.pem" artifacts/firmware-signed.bin
+          test "$(stat -c%s artifacts/firmware-signed.bin)" -le 262144
+
+      - name: Ensure private development keys are not tracked
+        run: |
+          test ! -e ../Bootloader/root-ed25519.pem
+          test ! -e ../Bootloader/root-ed25519.pub.pem

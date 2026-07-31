@@ -1071,6 +1071,7 @@ dependencies = [
  "getrandom",
  "heapless",
  "panic-probe",
+ "sha2",
  "static_cell",
  "sunset",
  "sunset-async",

@@ -1,0 +1,63 @@
+/*
+ * STM32H723ZG internal flash: eight 128 KiB erase sectors.
+ *
+ * Offset swap deliberately gives the secondary slot one extra sector.
+ * A staged update starts at 0x080A0000 (the second secondary sector), not at
+ * the slot's 0x08080000 base. MCUboot uses the first sector while swapping.
+ */
+
+/ {
+	chosen {
+		zephyr,code-partition = &boot_partition;
+	};
+};
+
+&flash0 {
+	partitions {
+		compatible = "fixed-partitions";
+		#address-cells = <1>;
+		#size-cells = <1>;
+
+		boot_partition: partition@0 {
+			label = "mcuboot";
+			reg = <0x00000000 0x00020000>;
+			read-only;
+		};
+
+		slot0_partition: partition@20000 {
+			label = "image-0";
+			reg = <0x00020000 0x00060000>;
+		};
+
+		slot1_partition: partition@80000 {
+			label = "image-1";
+			reg = <0x00080000 0x00080000>;
+		};
+	};
+};
+
+/*
+ * Hand the MCU to the bare-metal Rust application in a reset-like clock
+ * state. The board DTS normally runs Zephyr from a 550 MHz HSE/PLL clock.
+ * Embassy first switches to HSI before constructing its own 400 MHz PLL; a
+ * chain-load from the already-running Zephyr PLL prevents that transition on
+ * this SoC. MCUboot needs no high clock rate, so keep it on the 64 MHz HSI.
+ */
+&pll {
+	status = "disabled";
+};
+
+&pll2 {
+	status = "disabled";
+};
+
+&rcc {
+	clocks = <&clk_hsi>;
+	clock-frequency = <DT_FREQ_M(64)>;
+	d1cpre = <1>;
+	hpre = <1>;
+	d1ppre = <1>;
+	d2ppre1 = <1>;
+	d2ppre2 = <1>;
+	d3ppre = <1>;
+};

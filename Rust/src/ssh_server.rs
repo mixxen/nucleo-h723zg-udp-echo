@@ -10,11 +10,14 @@ use core::fmt::Write as _;
 use defmt::{info, warn};
 use embassy_futures::select::{Either, select};
 use embassy_net::{Stack, tcp::TcpSocket};
+use embassy_stm32::flash::{Blocking, Flash};
 use embassy_sync::{blocking_mutex::raw::NoopRawMutex, channel::Channel};
 use embassy_time::{Duration, Timer};
 use embedded_io_async::{Read, Write};
 use heapless::{String, Vec};
-use nucleo_h723zg_udp_echo::{SSH_PORT, SSH_USERNAME, SshCommand, parse_ssh_command};
+use nucleo_h723zg_udp_echo::{
+    FIRMWARE_UPDATE_SUBSYSTEM, SSH_PORT, SSH_USERNAME, SshCommand, parse_ssh_command,
+};
 use sunset::{ChanFail, ChanHandle, PubKey, ServEvent, SignKey};
 use sunset_async::{ProgressHolder, SSHServer};
 
@@ -29,11 +32,12 @@ const COMMAND_CAPACITY: usize = 128;
 enum SessionRequest {
     Shell(ChanHandle),
     Exec(ChanHandle, String<COMMAND_CAPACITY>),
+    FirmwareUpdate(ChanHandle),
 }
 
 /// Listen forever, serving one SSH connection at a time.
 #[embassy_executor::task]
-pub async fn run(stack: Stack<'static>) -> ! {
+pub async fn run(stack: Stack<'static>, mut flash: Flash<'static, Blocking>) -> ! {
     // The same host key is reconstructed after every reset. OpenSSH can
     // therefore detect an impostor instead of seeing a new server each boot.
     let host_key = SignKey::Ed25519(ed25519_dalek::SigningKey::from_bytes(&SSH_HOST_KEY_SEED));
@@ -62,7 +66,7 @@ pub async fn run(stack: Stack<'static>) -> ! {
         if let Some(remote) = socket.remote_endpoint() {
             info!("SSH connection from {}", remote);
         }
-        match serve_connection(&mut socket, stack, &host_key).await {
+        match serve_connection(&mut socket, stack, &host_key, &mut flash).await {
             Ok(()) => socket.close(),
             Err(_) => {
                 warn!("SSH connection ended with an error");
@@ -81,6 +85,7 @@ async fn serve_connection(
     socket: &mut TcpSocket<'_>,
     stack: Stack<'static>,
     host_key: &SignKey,
+    flash: &mut Flash<'static, Blocking>,
 ) -> sunset::Result<()> {
     // Sunset uses caller-owned packet buffers, keeping memory use visible and
     // deterministic. These are distinct from Embassy's TCP window buffers.
@@ -90,7 +95,7 @@ async fn serve_connection(
     let requests = Channel::<NoopRawMutex, SessionRequest, 1>::new();
 
     let protocol = handle_protocol_events(&server, host_key, &requests);
-    let commands = handle_session(&server, stack, &requests);
+    let commands = handle_session(&server, stack, &requests, flash);
     let application = async {
         match select(protocol, commands).await {
             Either::First(result) | Either::Second(result) => result,
@@ -180,7 +185,23 @@ async fn handle_protocol_events(
                     event.succeed()?;
                 }
             }
-            ServEvent::SessionSubsystem(event) => event.fail()?,
+            ServEvent::SessionSubsystem(event) => {
+                let is_updater = event.command()? == FIRMWARE_UPDATE_SUBSYSTEM;
+                let Some(handle) = opened_channel.take() else {
+                    event.fail()?;
+                    continue;
+                };
+                if is_updater
+                    && handle.num() == event.channel()
+                    && requests
+                        .try_send(SessionRequest::FirmwareUpdate(handle))
+                        .is_ok()
+                {
+                    event.succeed()?;
+                } else {
+                    event.fail()?;
+                }
+            }
             ServEvent::Defunct => return Ok(()),
             ServEvent::PollAgain => {}
         }
@@ -192,6 +213,7 @@ async fn handle_session(
     server: &SSHServer<'_>,
     stack: Stack<'static>,
     requests: &Channel<NoopRawMutex, SessionRequest, 1>,
+    flash: &mut Flash<'static, Blocking>,
 ) -> sunset::Result<()> {
     match requests.receive().await {
         SessionRequest::Shell(handle) => {
@@ -201,6 +223,10 @@ async fn handle_session(
         SessionRequest::Exec(handle, command) => {
             let mut stream = server.stdio(handle).await?;
             execute_command(&mut stream, stack, &command).await?;
+        }
+        SessionRequest::FirmwareUpdate(handle) => {
+            let mut stream = server.stdio(handle).await?;
+            crate::firmware_update::receive(&mut stream, flash).await?;
         }
     }
 

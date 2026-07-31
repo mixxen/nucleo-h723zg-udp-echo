@@ -10,6 +10,9 @@ publish = false
 default = ["firmware"]
 firmware = []
 host-tests = []
+# Hardware acceptance-test only: deliberately withhold MCUboot confirmation
+# so the next reset must restore the previous image.
+rollback-test = []
 
 [lib]
 test = false
@@ -34,7 +37,6 @@ embassy-stm32 = { version = "0.6.0", features = [
     "defmt",
     "stm32h723zg",
     "time-driver-tim2",
-    "memory-x",
 ] }
 embassy-executor = { version = "0.10.0", features = [
     "platform-cortex-m",
@@ -71,6 +73,7 @@ defmt-rtt = "1.0.0"
 getrandom = { version = "0.2.17", default-features = false, features = ["custom"] }
 heapless = { version = "0.9.1", default-features = false }
 panic-probe = { version = "1.0.0", features = ["print-defmt"] }
+sha2 = { version = "0.10.9", default-features = false }
 static_cell = "2.1.1"
 sunset = { version = "0.5.0", default-features = false, features = ["embedded-io"] }
 sunset-async = { version = "0.5.0", default-features = false }
@@ -86,5 +89,7 @@ overflow-checks = true
 codegen-units = 1
 debug = 2
 lto = "fat"
-opt-level = 3
+# MCUboot's rollback trailer consumes one 128 KiB erase sector. Optimize for
+# size so the signed application fits in the remaining two sectors.
+opt-level = "z"
 overflow-checks = false

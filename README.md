@@ -9,6 +9,10 @@ A tested Embassy-based Rust implementation is available in
 [Rust/README.md](Rust/README.md). It builds and flashes independently and
 does not modify the C application.
 
+The implementation plan and live progress ledger for signed, rollback-safe
+Ethernet updates is in
+[ETHERNET_FIRMWARE_UPDATE_PLAN.md](ETHERNET_FIRMWARE_UPDATE_PLAN.md).
+
 ## What the application does
 
 The board:
@@ -18,16 +22,213 @@ The board:
 - echoes each datagram to UDP port 7 on the client.
 
 The Rust version also runs a public-key-authenticated SSH management shell on
-TCP port 2222. It exposes a small command set (`help`, `status`, `echo`, and
-`exit`) rather than an operating-system shell.
+TCP port 2222 and an isolated `firmware-update` SSH subsystem. The shell
+exposes a small command set (`help`, `status`, `echo`, and `exit`) rather than
+an operating-system shell.
 
 The firmware uses the locally administered MAC address
 `02-00-00-00-00-00`. If DHCP fails, it eventually falls back to
 `192.168.0.10/24`.
 
-Because the server always sends its response to client port 7, a test client
-must bind its local UDP socket to port 7. Sending from an ordinary ephemeral
-port will reach the board, but the response will go to a different local port.
+Because the original C server always sends its response to client port 7, its
+test client must bind its local UDP socket to port 7. The Rust implementation
+used by the demo below replies to the sender's actual source port.
+
+## End-to-end Rust demo
+
+This walkthrough starts with source code, performs the initial USB/ST-LINK
+installation, exercises UDP and SSH, and then installs a newer signed release
+over Ethernet. The complete sequence was last executed successfully on the
+connected NUCLEO-H723ZG on **2026-07-31**.
+
+Run the commands in **Windows PowerShell** from the repository root:
+
+```powershell
+cd C:\Users\USER\git\mmhel\nucleo-h723zg-udp-echo
+```
+
+The demo assumes Rust, the ARM target, OpenOCD, the pinned Zephyr workspace,
+and Windows OpenSSH are installed as described elsewhere in this README. Keep
+both the ST-LINK USB connection and Ethernet cable connected.
+
+### 1. Provision development keys
+
+Create the firmware-signing key once. The conditional prevents accidentally
+replacing an existing key, because a new key would require rebuilding and
+reflashing MCUboot:
+
+```powershell
+if (-not (Test-Path .\Bootloader\root-ed25519.pem)) {
+    powershell -ExecutionPolicy Bypass -File .\Bootloader\tools\provision-signing-key.ps1
+}
+```
+
+Create the persistent board SSH host key and a project-local client login key:
+
+```powershell
+powershell -ExecutionPolicy Bypass -File .\Rust\tools\provision_ssh.ps1
+```
+
+These private keys are under Git-ignored paths. The SSH login key and firmware
+signing key serve different purposes and must not be reused or committed.
+
+### 2. Compile MCUboot and the first signed application
+
+Build MCUboot from its pinned Zephyr configuration:
+
+```powershell
+powershell -ExecutionPolicy Bypass -File .\Bootloader\tools\build-mcuboot.ps1 -Pristine
+```
+
+Build the optimized Rust firmware, convert it to a binary, sign it, verify the
+signature, and enforce the flash-size limit:
+
+```powershell
+powershell -ExecutionPolicy Bypass -File .\Rust\tools\build-signed.ps1 -Version 0.1.0
+```
+
+The important outputs are:
+
+- `Bootloader\build\zephyr\zephyr.hex`
+- `Rust\artifacts\firmware-signed.bin`
+
+### 3. Perform the initial flash through ST-LINK
+
+The factory operation erases internal MCU flash, then programs and verifies
+MCUboot and the signed Rust application:
+
+```powershell
+powershell -ExecutionPolicy Bypass -File .\Rust\tools\flash.ps1 -SkipBuild
+```
+
+The final message should be:
+
+```text
+MCUboot and signed Rust firmware programmed, verified, and started.
+```
+
+Wait several seconds for Ethernet auto-negotiation and DHCP.
+
+### 4. Find and verify the board's IP address
+
+Look in the router's DHCP client list for MAC address
+`02-00-00-00-00-00`. During development the router normally assigned
+`192.168.68.57`, but DHCP may choose a different address. Store the actual
+address once so the remaining commands are easy to copy:
+
+```powershell
+$boardIp = "192.168.68.57"
+Test-Connection $boardIp -Count 2
+```
+
+PowerShell variables exist only in the terminal session where they were set.
+If you open a new VS Code terminal later, set `$boardIp` again. The remaining
+examples repeat the assignment so each block can also be run independently.
+
+If the router is unavailable, `arp -a` can show the address after the computer
+has communicated with the board. The firmware falls back to
+`192.168.0.10/24` after 30 seconds when DHCP is unavailable.
+
+### 5. Run the UDP echo demo
+
+Run the binary acceptance client against UDP port 7:
+
+```powershell
+$boardIp = "192.168.68.57" # Replace this if DHCP assigned another address.
+powershell -ExecutionPolicy Bypass -File .\Rust\tools\udp_echo_test.ps1 `
+    -BoardIp $boardIp
+```
+
+It sends 25 datagrams using payload sizes from zero through 1472 bytes and
+checks the source address, source port, length, and every returned byte. A
+successful run ends with output similar to:
+
+```text
+PASS: 25 UDP datagrams echoed byte-for-byte by 192.168.68.57:7.
+Tested payload sizes: 0, 1, 32, 256, 1472 bytes.
+```
+
+### 6. SSH onto the board
+
+Connect to the management service on TCP port 2222 using the provisioned
+client key:
+
+```powershell
+$boardIp = "192.168.68.57" # Replace this if DHCP assigned another address.
+ssh -i .\Rust\.ssh\client_ed25519 -p 2222 "board@$boardIp"
+```
+
+At the board prompt, try:
+
+```text
+help
+status
+echo hello from ssh
+exit
+```
+
+This is a deliberately small embedded management shell, not Linux or a
+general-purpose command prompt. It supports only the documented commands.
+After `exit`, Windows OpenSSH may print `Connection ... closed by remote host`
+and return a nonzero status because the embedded server closes the channel
+without a separate SSH exit-status message. The displayed `bye` confirms the
+command itself completed.
+
+### 7. Build a newer signed release
+
+Every update should have a version higher than the installed release. For
+this demo, build version 0.1.1:
+
+```powershell
+powershell -ExecutionPolicy Bypass -File .\Rust\tools\build-signed.ps1 -Version 0.1.1
+```
+
+### 8. Flash the new release over SSH/Ethernet
+
+Run the uploader on the PC after leaving the interactive board shell:
+
+```powershell
+$boardIp = "192.168.68.57" # Replace this if DHCP assigned another address.
+powershell -ExecutionPolicy Bypass -File .\Rust\tools\ethernet-flash.ps1 `
+    -HostName $boardIp `
+    -KeyPath .\Rust\.ssh\client_ed25519
+```
+
+The client authenticates to the isolated `firmware-update` SSH subsystem,
+shows erase and transfer progress, and finishes with output like:
+
+```text
+ERASING
+READY
+PROGRESS 188120/188120
+OK rebooting into trial image
+Firmware accepted. The board is rebooting into an MCUboot trial image.
+```
+
+The exact image length can change as the code changes. MCUboot verifies the
+firmware signature, installs it as a trial, and starts it. Once the Rust
+application reaches its health checkpoint it confirms the image; otherwise,
+MCUboot restores the previous confirmed release after another reset.
+
+### 9. Verify the updated board
+
+Allow several seconds for the reboot and DHCP, then repeat the network checks:
+
+```powershell
+$boardIp = "192.168.68.57" # Replace this if DHCP assigned another address.
+Test-Connection $boardIp -Count 2
+
+powershell -ExecutionPolicy Bypass -File .\Rust\tools\udp_echo_test.ps1 `
+    -BoardIp $boardIp
+
+ssh -i .\Rust\.ssh\client_ed25519 -p 2222 "board@$boardIp" status
+```
+
+The final SSH command should report an active Ethernet link, the DHCP address,
+UDP port 7, and SSH port 2222. It may then print the same expected
+`closed by remote host` message described above. ST-LINK is still the recovery
+path for replacing MCUboot or recovering a board whose application slots are
+both unusable.
 
 ## Rust implementation architecture
 
@@ -66,6 +267,27 @@ See [the complete Rust architecture and Embassy primer](Rust/README.md#architect
 for the request data path, task lifecycle, and a C/C++-to-Rust mental-model
 table.
 
+The boot and update path adds a small, separately built MCUboot stage:
+
+```text
+Reset -> MCUboot verifies active image -> Rust/Embassy application
+                                              |
+authenticated SSH update -> secondary slot --+
+                                              |
+                         reset -> verify -> trial boot
+                                             /        \
+                                      confirm          fail/reset
+                                         |                 |
+                                      keep it           roll back
+```
+
+ST-LINK remains the initial-install and recovery path. Normal releases travel
+over the existing encrypted SSH connection, but MCUboot independently checks
+their Ed25519 signature before executing them. An interrupted upload cannot
+select a partial image because the application writes MCUboot's activation
+magic only after the length, SHA-256, flash read-back, and slot-boundary checks
+all pass.
+
 ### Connect to the Rust SSH service
 
 SSH keys are embedded at build time but are never committed. From `Rust/`,
@@ -84,6 +306,22 @@ ssh -i .\.ssh\client_ed25519 -p 2222 board@BOARD_IP
 
 The service accepts only the provisioned Ed25519 key; it has no password
 login. See [the detailed SSH setup and security notes](Rust/README.md#ssh-management-service).
+
+After the MCUboot factory image is installed once, build a newly versioned
+signed image and upload it over Ethernet:
+
+```powershell
+cd Rust
+powershell -ExecutionPolicy Bypass -File .\tools\build-signed.ps1 -Version 0.1.2
+powershell -ExecutionPolicy Bypass -File .\tools\ethernet-flash.ps1 `
+    -HostName BOARD_IP `
+    -KeyPath .\.ssh\client_ed25519
+```
+
+The board stages the image outside the running slot, verifies SHA-256 from
+flash, reboots into a trial, and confirms only after the new application
+reaches its startup health checkpoint. See
+[the detailed update workflow](Rust/README.md#signed-firmware-updates-over-ethernet).
 
 ### Rust testing strategy
 
