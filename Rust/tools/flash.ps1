@@ -3,12 +3,18 @@ param(
     [switch]$SkipBuild,
     [ValidatePattern("^\d+\.\d+\.\d+(\+\d+)?$")]
     [string]$Version = "0.1.0",
-    [string]$ZephyrWorkspace = (Join-Path $env:USERPROFILE "zephyrproject-v4.4.0")
+    [string]$ZephyrWorkspace = (Join-Path $env:USERPROFILE "zephyrproject-v4.4.0"),
+    [switch]$W5500,
+    [switch]$W5500Offload
 )
 
 $ErrorActionPreference = "Stop"
 $projectRoot = Split-Path -Parent $PSScriptRoot
 $repositoryRoot = Split-Path -Parent $projectRoot
+
+if ($W5500 -and $W5500Offload) {
+    throw "Choose either -W5500 or -W5500Offload, not both."
+}
 
 if (-not $SkipBuild) {
     & (Join-Path $repositoryRoot "Bootloader\tools\build-mcuboot.ps1") `
@@ -19,14 +25,23 @@ if (-not $SkipBuild) {
 
     & (Join-Path $PSScriptRoot "build-signed.ps1") `
         -Version $Version `
-        -ZephyrWorkspace $ZephyrWorkspace
+        -ZephyrWorkspace $ZephyrWorkspace `
+        -W5500:$W5500 `
+        -W5500Offload:$W5500Offload
     if ($LASTEXITCODE -ne 0) {
         throw "Signed application build failed."
     }
 }
 
 $bootloaderHex = Join-Path $repositoryRoot "Bootloader\build\zephyr\zephyr.hex"
-$signedApplication = Join-Path $projectRoot "artifacts\firmware-signed.bin"
+$signedApplicationName = if ($W5500Offload) {
+    "firmware-w5500-offload-signed.bin"
+} elseif ($W5500) {
+    "firmware-w5500-signed.bin"
+} else {
+    "firmware-signed.bin"
+}
+$signedApplication = Join-Path $projectRoot "artifacts\$signedApplicationName"
 foreach ($requiredFile in @($bootloaderHex, $signedApplication)) {
     if (-not (Test-Path -LiteralPath $requiredFile -PathType Leaf)) {
         throw "Factory image component not found: '$requiredFile'"

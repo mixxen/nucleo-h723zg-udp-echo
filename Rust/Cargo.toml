@@ -9,6 +9,8 @@ publish = false
 # test harness for the bare-metal ARM target.
 default = ["firmware"]
 firmware = []
+wiznet = []
+wiznet-offload = []
 host-tests = []
 # Hardware acceptance-test only: deliberately withhold MCUboot confirmation
 # so the next reset must restore the previous image.
@@ -26,6 +28,20 @@ path = "src/main.rs"
 test = false
 bench = false
 required-features = ["firmware"]
+
+[[bin]]
+name = "nucleo-h723zg-w5500-udp-echo"
+path = "src/bin/w5500_udp_echo.rs"
+test = false
+bench = false
+required-features = ["wiznet"]
+
+[[bin]]
+name = "nucleo-h723zg-w5500-offload-udp-echo"
+path = "src/bin/w5500_offload_udp_echo.rs"
+test = false
+bench = false
+required-features = ["wiznet-offload"]
 
 [[test]]
 name = "host"
@@ -58,9 +74,13 @@ embassy-net = { version = "0.9.1", features = [
     "udp",
     "auto-icmp-echo-reply",
 ] }
+embassy-net-wiznet = { version = "0.3.0", features = ["defmt"] }
 embassy-sync = "0.8.0"
+embedded-hal = "1.0.0"
+embedded-hal-async = "1.0.0"
 embedded-io-async = "0.7.0"
 ed25519-dalek = { version = "2.2.0", default-features = false, features = ["zeroize"] }
+w5500-dhcp = { version = "0.7.0", features = ["defmt", "eh1"] }
 
 cortex-m = { version = "0.7.7", features = [
     "inline-asm",

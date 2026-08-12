@@ -7,19 +7,35 @@ param(
     [int]$Count = 25,
 
     [ValidateRange(100, 30000)]
-    [int]$TimeoutMilliseconds = 3000
+    [int]$TimeoutMilliseconds = 3000,
+
+    [string]$Sizes = "0,1,32,256,1472"
 )
 
 $ErrorActionPreference = "Stop"
 $udp = [Net.Sockets.UdpClient]::new()
 $udp.Client.ReceiveTimeout = $TimeoutMilliseconds
 $remote = [Net.IPEndPoint]::new([Net.IPAddress]::Any, 0)
-$sizes = 0, 1, 32, 256, 1472
+$testSizes = @($Sizes.Split(",", [StringSplitOptions]::RemoveEmptyEntries) | ForEach-Object {
+    $parsed = 0
+    if (-not [int]::TryParse($_.Trim(), [ref]$parsed)) {
+        throw "Invalid payload size '$_'. Use a comma-separated list such as 1,32,256,1472."
+    }
+    $parsed
+})
+if ($testSizes.Count -eq 0) {
+    throw "-Sizes must contain at least one payload size."
+}
+foreach ($size in $testSizes) {
+    if ($size -lt 0 -or $size -gt 1472) {
+        throw "Payload size $size is outside the supported range 0..1472."
+    }
+}
 $random = [Random]::new(0x723)
 
 try {
     for ($sequence = 0; $sequence -lt $Count; $sequence++) {
-        $size = $sizes[$sequence % $sizes.Count]
+        $size = $testSizes[$sequence % $testSizes.Count]
         $payload = [byte[]]::new($size)
         $random.NextBytes($payload)
 
@@ -50,4 +66,4 @@ finally {
 }
 
 Write-Host "PASS: $Count UDP datagrams echoed byte-for-byte by ${BoardIp}:7."
-Write-Host "Tested payload sizes: $($sizes -join ', ') bytes."
+Write-Host "Tested payload sizes: $($testSizes -join ', ') bytes."

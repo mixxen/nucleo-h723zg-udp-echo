@@ -4,7 +4,9 @@ param(
     [string]$Version = "0.1.0",
     [string]$ZephyrWorkspace = (Join-Path $env:USERPROFILE "zephyrproject-v4.4.0"),
     [string]$ZephyrSdk = (Join-Path $env:USERPROFILE "zephyr-sdk-1.0.1"),
-    [switch]$RollbackTest
+    [switch]$RollbackTest,
+    [switch]$W5500,
+    [switch]$W5500Offload
 )
 
 $ErrorActionPreference = "Stop"
@@ -14,9 +16,24 @@ $artifacts = Join-Path $projectRoot "artifacts"
 $privateKey = Join-Path $repositoryRoot "Bootloader\root-ed25519.pem"
 $imgtool = Join-Path $ZephyrWorkspace ".venv313\Scripts\imgtool.exe"
 $objcopy = Join-Path $ZephyrSdk "gnu\arm-zephyr-eabi\bin\arm-zephyr-eabi-objcopy.exe"
-$elf = Join-Path $projectRoot "target\thumbv7em-none-eabihf\release\nucleo-h723zg-udp-echo"
-$unsignedBinary = Join-Path $artifacts "firmware-unsigned.bin"
-$signedBinary = Join-Path $artifacts "firmware-signed.bin"
+if ($W5500 -and $W5500Offload) {
+    throw "Choose either -W5500 or -W5500Offload, not both."
+}
+if (($W5500 -or $W5500Offload) -and $RollbackTest) {
+    throw "-RollbackTest applies only to the native Ethernet firmware."
+}
+
+$binaryName = if ($W5500Offload) {
+    "nucleo-h723zg-w5500-offload-udp-echo"
+} elseif ($W5500) {
+    "nucleo-h723zg-w5500-udp-echo"
+} else {
+    "nucleo-h723zg-udp-echo"
+}
+$artifactPrefix = if ($W5500Offload) { "firmware-w5500-offload" } elseif ($W5500) { "firmware-w5500" } else { "firmware" }
+$elf = Join-Path $projectRoot "target\thumbv7em-none-eabihf\release\$binaryName"
+$unsignedBinary = Join-Path $artifacts "$artifactPrefix-unsigned.bin"
+$signedBinary = Join-Path $artifacts "$artifactPrefix-signed.bin"
 
 foreach ($requiredFile in @($privateKey, $imgtool, $objcopy)) {
     if (-not (Test-Path -LiteralPath $requiredFile -PathType Leaf)) {
@@ -29,7 +46,15 @@ New-Item -ItemType Directory -Path $artifacts -Force | Out-Null
 Push-Location $projectRoot
 try {
     $cargoArguments = @("build", "--locked", "--release")
-    if ($RollbackTest) {
+    if ($W5500 -or $W5500Offload) {
+        $feature = if ($W5500Offload) { "wiznet-offload" } else { "wiznet" }
+        $cargoArguments += @(
+            "--no-default-features",
+            "--features", $feature,
+            "--bin", $binaryName
+        )
+    }
+    elseif ($RollbackTest) {
         Write-Warning "Building a hardware-test image that will NOT confirm itself."
         $cargoArguments += @("--features", "rollback-test")
     }

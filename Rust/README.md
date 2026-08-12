@@ -8,6 +8,9 @@ For one linear, copy-and-paste walkthrough from compilation through an
 Ethernet firmware update, see the main README's
 [end-to-end Rust demo](../README.md#end-to-end-rust-demo).
 
+For the separate UDP-only executable that uses a WIZnet W5500 Arduino shield
+instead of the onboard RMII Ethernet hardware, see [W5500.md](W5500.md).
+
 The firmware:
 
 - runs the STM32H723 at 400 MHz with AHB at 200 MHz;
@@ -486,6 +489,8 @@ by an unknown key. Detailed evidence remains in
 - `src/lib.rs`: hardware-independent constants and checked payload logic
 - `tests/host.rs`: host-side tests of the library's public production API
 - `src/main.rs`: clocks, board pins, Ethernet construction, and task startup
+- `src/bin/w5500_udp_echo.rs`: separate SPI W5500 shield executable
+- `src/bin/w5500_offload_udp_echo.rs`: W5500 hardware-socket/offload executable
 - `src/network.rs`: DHCP, static fallback, link state, and LEDs
 - `src/udp_echo.rs`: bounded-buffer UDP echo task
 - `src/ssh_server.rs`: Sunset authentication, channel handling, and commands

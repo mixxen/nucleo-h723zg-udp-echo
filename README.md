@@ -9,6 +9,9 @@ A tested Embassy-based Rust implementation is available in
 [Rust/README.md](Rust/README.md). It builds and flashes independently and
 does not modify the C application.
 
+An optional UDP-only build for the SPI-connected WIZnet W5500 Arduino shield
+is documented in [Rust/W5500.md](Rust/W5500.md).
+
 The implementation plan and live progress ledger for signed, rollback-safe
 Ethernet updates is in
 [ETHERNET_FIRMWARE_UPDATE_PLAN.md](ETHERNET_FIRMWARE_UPDATE_PLAN.md).

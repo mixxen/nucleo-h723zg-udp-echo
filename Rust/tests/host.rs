@@ -10,9 +10,9 @@ use nucleo_h723zg_udp_echo::{
     MAX_DATAGRAM_SIZE, MAX_SIGNED_IMAGE_SIZE, MCUBOOT_IMAGE_MAGIC, MCUBOOT_TRAILER_MAGIC,
     PRIMARY_SLOT_OFFSET, PRIMARY_SLOT_SIZE, SECONDARY_SLOT_OFFSET, SECONDARY_SLOT_SIZE, SSH_PORT,
     SSH_USERNAME, SshCommand, UPDATE_HEADER_SIZE, UPDATE_PROTOCOL_MAGIC, UPDATE_PROTOCOL_VERSION,
-    UpdateHeader, UpdateHeaderError, echo_payload, has_mcuboot_image_magic, mcuboot_image_ok_block,
-    mcuboot_magic_block, mcuboot_test_swap_info_block, parse_ssh_command, trailer_image_ok_offset,
-    trailer_magic_block_offset, trailer_swap_info_offset,
+    UpdateHeader, UpdateHeaderError, W5500_MAC_ADDRESS, echo_payload, has_mcuboot_image_magic,
+    mcuboot_image_ok_block, mcuboot_magic_block, mcuboot_test_swap_info_block, parse_ssh_command,
+    trailer_image_ok_offset, trailer_magic_block_offset, trailer_swap_info_offset,
 };
 
 #[test]
@@ -41,6 +41,15 @@ fn length_beyond_buffer_is_rejected() {
 fn mac_address_is_local_and_unicast() {
     assert_eq!(MAC_ADDRESS[0] & 0b0000_0010, 0b0000_0010);
     assert_eq!(MAC_ADDRESS[0] & 0b0000_0001, 0);
+}
+
+#[test]
+fn native_and_w5500_interfaces_have_distinct_local_unicast_addresses() {
+    assert_ne!(MAC_ADDRESS, W5500_MAC_ADDRESS);
+    for address in [MAC_ADDRESS, W5500_MAC_ADDRESS] {
+        assert_eq!(address[0] & 0x01, 0, "multicast bit must be clear");
+        assert_ne!(address[0] & 0x02, 0, "local-address bit must be set");
+    }
 }
 
 #[test]

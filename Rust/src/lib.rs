@@ -10,6 +10,12 @@
 /// Locally administered, unicast Ethernet address used by this example.
 pub const MAC_ADDRESS: [u8; 6] = [0x02, 0x00, 0x00, 0x00, 0x00, 0x00];
 
+/// Locally administered address used only by the SPI-connected W5500 shield.
+///
+/// Keeping this distinct from [`MAC_ADDRESS`] gives the router separate DHCP
+/// identities for the native RMII port and the removable shield.
+pub const W5500_MAC_ADDRESS: [u8; 6] = [0x02, 0x00, 0x00, 0x00, 0x55, 0x00];
+
 /// UDP port assigned to the traditional echo protocol.
 pub const UDP_ECHO_PORT: u16 = 7;
 
