@@ -1,4 +1,4 @@
-//! UDP echo service.
+//! UDP echo service shared by the native-RMII and W5500-MACRAW binaries.
 //!
 //! A UDP server receives independent datagrams rather than a byte stream.
 //! Every received payload is sent back unchanged to the endpoint that sent it.

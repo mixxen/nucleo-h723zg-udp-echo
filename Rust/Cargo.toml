@@ -9,6 +9,7 @@ publish = false
 # test harness for the bare-metal ARM target.
 default = ["firmware"]
 firmware = []
+native-udp = []
 wiznet = []
 wiznet-offload = []
 host-tests = []
@@ -24,14 +25,21 @@ bench = false
 # disable Cargo's host-style test and benchmark targets for this binary.
 [[bin]]
 name = "nucleo-h723zg-udp-echo"
-path = "src/main.rs"
+path = "src/bin/native_rmii_managed.rs"
 test = false
 bench = false
 required-features = ["firmware"]
 
 [[bin]]
+name = "nucleo-h723zg-native-rmii-udp-echo"
+path = "src/bin/native_rmii_udp_echo.rs"
+test = false
+bench = false
+required-features = ["native-udp"]
+
+[[bin]]
 name = "nucleo-h723zg-w5500-udp-echo"
-path = "src/bin/w5500_udp_echo.rs"
+path = "src/bin/w5500_macraw_udp_echo.rs"
 test = false
 bench = false
 required-features = ["wiznet"]

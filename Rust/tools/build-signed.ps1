@@ -5,6 +5,7 @@ param(
     [string]$ZephyrWorkspace = (Join-Path $env:USERPROFILE "zephyrproject-v4.4.0"),
     [string]$ZephyrSdk = (Join-Path $env:USERPROFILE "zephyr-sdk-1.0.1"),
     [switch]$RollbackTest,
+    [switch]$NativeUdp,
     [switch]$W5500,
     [switch]$W5500Offload
 )
@@ -16,21 +17,24 @@ $artifacts = Join-Path $projectRoot "artifacts"
 $privateKey = Join-Path $repositoryRoot "Bootloader\root-ed25519.pem"
 $imgtool = Join-Path $ZephyrWorkspace ".venv313\Scripts\imgtool.exe"
 $objcopy = Join-Path $ZephyrSdk "gnu\arm-zephyr-eabi\bin\arm-zephyr-eabi-objcopy.exe"
-if ($W5500 -and $W5500Offload) {
-    throw "Choose either -W5500 or -W5500Offload, not both."
+$variantCount = @($NativeUdp, $W5500, $W5500Offload).Where({ $_ }).Count
+if ($variantCount -gt 1) {
+    throw "Choose only one of -NativeUdp, -W5500, or -W5500Offload."
 }
-if (($W5500 -or $W5500Offload) -and $RollbackTest) {
-    throw "-RollbackTest applies only to the native Ethernet firmware."
+if (($NativeUdp -or $W5500 -or $W5500Offload) -and $RollbackTest) {
+    throw "-RollbackTest applies only to the managed native Ethernet firmware."
 }
 
 $binaryName = if ($W5500Offload) {
     "nucleo-h723zg-w5500-offload-udp-echo"
 } elseif ($W5500) {
     "nucleo-h723zg-w5500-udp-echo"
+} elseif ($NativeUdp) {
+    "nucleo-h723zg-native-rmii-udp-echo"
 } else {
     "nucleo-h723zg-udp-echo"
 }
-$artifactPrefix = if ($W5500Offload) { "firmware-w5500-offload" } elseif ($W5500) { "firmware-w5500" } else { "firmware" }
+$artifactPrefix = if ($W5500Offload) { "firmware-w5500-offload" } elseif ($W5500) { "firmware-w5500" } elseif ($NativeUdp) { "firmware-native-udp" } else { "firmware" }
 $elf = Join-Path $projectRoot "target\thumbv7em-none-eabihf\release\$binaryName"
 $unsignedBinary = Join-Path $artifacts "$artifactPrefix-unsigned.bin"
 $signedBinary = Join-Path $artifacts "$artifactPrefix-signed.bin"
@@ -46,8 +50,8 @@ New-Item -ItemType Directory -Path $artifacts -Force | Out-Null
 Push-Location $projectRoot
 try {
     $cargoArguments = @("build", "--locked", "--release")
-    if ($W5500 -or $W5500Offload) {
-        $feature = if ($W5500Offload) { "wiznet-offload" } else { "wiznet" }
+    if ($NativeUdp -or $W5500 -or $W5500Offload) {
+        $feature = if ($W5500Offload) { "wiznet-offload" } elseif ($W5500) { "wiznet" } else { "native-udp" }
         $cargoArguments += @(
             "--no-default-features",
             "--features", $feature,

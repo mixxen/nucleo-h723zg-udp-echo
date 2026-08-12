@@ -13,9 +13,17 @@
 #![no_main]
 
 // Each module owns one distinct part of the application.
+#[path = "../board.rs"]
+mod board;
+#[path = "../firmware_update.rs"]
 mod firmware_update;
+#[path = "../bringup/native_rmii.rs"]
+mod native_rmii;
+#[path = "../bringup/embassy_network.rs"]
 mod network;
+#[path = "../ssh_server.rs"]
 mod ssh_server;
+#[path = "../servers/embassy_udp_echo.rs"]
 mod udp_echo;
 
 use core::cell::RefCell;
@@ -25,13 +33,11 @@ use defmt::{info, unwrap};
 use embassy_executor::Spawner;
 use embassy_futures::yield_now;
 use embassy_net::StackResources;
-use embassy_stm32::eth::{Ethernet, GenericPhy, PacketQueue, Sma};
 use embassy_stm32::flash::Flash;
 use embassy_stm32::gpio::{Level, Output, Speed};
-use embassy_stm32::peripherals::{ETH, ETH_SMA, RNG};
+use embassy_stm32::peripherals::RNG;
 use embassy_stm32::rng::Rng;
-use embassy_stm32::{Config, bind_interrupts, eth, rng};
-use nucleo_h723zg_udp_echo::MAC_ADDRESS;
+use embassy_stm32::{bind_interrupts, rng};
 use static_cell::StaticCell;
 // Importing these crates as `_` keeps their symbols linked even though we do
 // not call them directly. `defmt-rtt` transports logs through the debugger,
@@ -41,20 +47,9 @@ use {defmt_rtt as _, panic_probe as _};
 // This macro connects the STM32 `ETH` interrupt to Embassy's Ethernet driver
 // at compile time. `Irqs` is a zero-sized proof that the correct handler was
 // installed; it is passed to `Ethernet::new` later.
-bind_interrupts!(struct Irqs {
-    ETH => eth::InterruptHandler;
+bind_interrupts!(struct RngInterrupts {
     RNG => rng::InterruptHandler<RNG>;
 });
-
-// The complete generic Ethernet type is long, so this alias makes the task
-// signature readable. `'static` means the device and PHY management interface
-// remain valid for the whole firmware run.
-type EthernetDevice = Ethernet<'static, ETH, GenericPhy<Sma<'static, ETH_SMA>>>;
-
-// Async tasks and DMA cannot borrow temporary memory that disappears. A
-// `StaticCell` safely initializes static memory exactly once, without a heap.
-// The packet queue contains four receive and four transmit DMA descriptors.
-static PACKET_QUEUE: StaticCell<PacketQueue<4, 4>> = StaticCell::new();
 // `StackResources<4>` covers DHCP, UDP echo, SSH TCP, and one spare socket.
 static NETWORK_RESOURCES: StaticCell<StackResources<4>> = StaticCell::new();
 
@@ -70,7 +65,7 @@ getrandom::register_custom_getrandom!(hardware_random);
 // This task continuously drives the network stack. The return type `!`
 // ("never") documents that a successful network runner does not terminate.
 #[embassy_executor::task]
-async fn net_task(runner: embassy_net::Runner<'static, EthernetDevice>) -> ! {
+async fn net_task(runner: embassy_net::Runner<'static, native_rmii::Device>) -> ! {
     // `run` needs mutable access because it updates protocol and socket state.
     let mut runner = runner;
     runner.run().await
@@ -78,52 +73,7 @@ async fn net_task(runner: embassy_net::Runner<'static, EthernetDevice>) -> ! {
 
 #[embassy_executor::main]
 async fn main(spawner: Spawner) -> ! {
-    // Start with Embassy's safe reset defaults, then describe the desired
-    // clock tree. The PLL calculation is:
-    // 64 MHz HSI / 4 * 50 / 2 = 400 MHz system clock.
-    // AHB runs at 200 MHz and each APB bus at 100 MHz.
-    let mut config = Config::default();
-    {
-        // The RCC names are only needed in this block, so the wildcard import
-        // is deliberately kept local instead of polluting the whole module.
-        use embassy_stm32::rcc::*;
-
-        config.rcc.hsi = Some(HSIPrescaler::DIV1);
-        config.rcc.csi = true;
-        config.rcc.pll1 = Some(Pll {
-            source: PllSource::HSI,
-            prediv: PllPreDiv::DIV4,
-            mul: PllMul::MUL50,
-            divp: Some(PllDiv::DIV2),
-            divq: None,
-            divr: None,
-        });
-        config.rcc.sys = Sysclk::PLL1_P;
-        config.rcc.ahb_pre = AHBPrescaler::DIV2;
-        config.rcc.apb1_pre = APBPrescaler::DIV2;
-        config.rcc.apb2_pre = APBPrescaler::DIV2;
-        config.rcc.apb3_pre = APBPrescaler::DIV2;
-        config.rcc.apb4_pre = APBPrescaler::DIV2;
-        config.rcc.voltage_scale = VoltageScale::Scale1;
-    }
-
-    // Initialization consumes the configuration and returns ownership tokens
-    // for every peripheral and pin. Rust then prevents two drivers from
-    // accidentally controlling the same piece of hardware.
-    let peripherals = embassy_stm32::init(config);
-
-    // MCUboot masks all interrupts while cleaning up its own NVIC state, then
-    // intentionally leaves PRIMASK set when it jumps here. Embassy has now
-    // configured the application's clocks, timer, vector table, and interrupt
-    // handlers, so this is the boundary where the application takes ownership
-    // and may safely accept interrupts. Without this step, ordinary Rust code
-    // still runs, but async timers and Ethernet never wake their tasks.
-    //
-    // This is `unsafe` because enabling interrupts before their handlers and
-    // shared state are initialized could let one observe inconsistent state.
-    unsafe {
-        cortex_m::interrupt::enable();
-    }
+    let peripherals = board::init(false);
 
     info!("Rust NUCLEO-H723ZG UDP echo and SSH server booting");
 
@@ -136,7 +86,7 @@ async fn main(spawner: Spawner) -> ! {
     // HSI48 is enabled by Embassy's default H7 clock configuration and feeds
     // the hardware RNG. Install the driver before Sunset can request random
     // padding, ephemeral keys, or key-exchange nonces.
-    let hardware_rng = Rng::new(peripherals.RNG, Irqs);
+    let hardware_rng = Rng::new(peripherals.RNG, RngInterrupts);
     critical_section::with(|section| {
         HARDWARE_RNG.borrow(section).replace(Some(hardware_rng));
     });
@@ -151,10 +101,8 @@ async fn main(spawner: Spawner) -> ! {
     // PG13 TXD0, PB13 TXD1, and PG11 TX_EN.
     // PA2 (MDIO) and PC1 (MDC) form the management interface used to configure
     // and query the external PHY.
-    let ethernet = Ethernet::new(
-        PACKET_QUEUE.init(PacketQueue::new()),
+    let ethernet = native_rmii::new(
         peripherals.ETH,
-        Irqs,
         peripherals.PA1,
         peripherals.PA7,
         peripherals.PC4,
@@ -162,7 +110,6 @@ async fn main(spawner: Spawner) -> ! {
         peripherals.PG13,
         peripherals.PB13,
         peripherals.PG11,
-        MAC_ADDRESS,
         peripherals.ETH_SMA,
         peripherals.PA2,
         peripherals.PC1,

@@ -41,6 +41,12 @@ jobs:
       - name: Build embedded firmware
         run: cargo build --locked --release
 
+      - name: Lint native RMII UDP-only firmware
+        run: cargo clippy --locked --release --no-default-features --features native-udp --bin nucleo-h723zg-native-rmii-udp-echo -- -D warnings
+
+      - name: Build native RMII UDP-only firmware
+        run: cargo build --locked --release --no-default-features --features native-udp --bin nucleo-h723zg-native-rmii-udp-echo
+
       - name: Lint W5500 shield firmware
         run: cargo clippy --locked --release --no-default-features --features wiznet --bin nucleo-h723zg-w5500-udp-echo -- -D warnings
 

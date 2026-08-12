@@ -4,6 +4,7 @@ param(
     [ValidatePattern("^\d+\.\d+\.\d+(\+\d+)?$")]
     [string]$Version = "0.1.0",
     [string]$ZephyrWorkspace = (Join-Path $env:USERPROFILE "zephyrproject-v4.4.0"),
+    [switch]$NativeUdp,
     [switch]$W5500,
     [switch]$W5500Offload
 )
@@ -12,8 +13,9 @@ $ErrorActionPreference = "Stop"
 $projectRoot = Split-Path -Parent $PSScriptRoot
 $repositoryRoot = Split-Path -Parent $projectRoot
 
-if ($W5500 -and $W5500Offload) {
-    throw "Choose either -W5500 or -W5500Offload, not both."
+$variantCount = @($NativeUdp, $W5500, $W5500Offload).Where({ $_ }).Count
+if ($variantCount -gt 1) {
+    throw "Choose only one of -NativeUdp, -W5500, or -W5500Offload."
 }
 
 if (-not $SkipBuild) {
@@ -26,6 +28,7 @@ if (-not $SkipBuild) {
     & (Join-Path $PSScriptRoot "build-signed.ps1") `
         -Version $Version `
         -ZephyrWorkspace $ZephyrWorkspace `
+        -NativeUdp:$NativeUdp `
         -W5500:$W5500 `
         -W5500Offload:$W5500Offload
     if ($LASTEXITCODE -ne 0) {
@@ -38,6 +41,8 @@ $signedApplicationName = if ($W5500Offload) {
     "firmware-w5500-offload-signed.bin"
 } elseif ($W5500) {
     "firmware-w5500-signed.bin"
+} elseif ($NativeUdp) {
+    "firmware-native-udp-signed.bin"
 } else {
     "firmware-signed.bin"
 }

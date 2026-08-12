@@ -1,4 +1,4 @@
-//! Ethernet link and IPv4 configuration supervision.
+//! Shared Embassy link and IPv4 configuration supervision.
 //!
 //! This task waits asynchronously rather than polling in a busy loop. While it
 //! is waiting, Embassy can run the packet driver and UDP server tasks.

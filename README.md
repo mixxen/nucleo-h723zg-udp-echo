@@ -12,6 +12,10 @@ does not modify the C application.
 An optional UDP-only build for the SPI-connected WIZnet W5500 Arduino shield
 is documented in [Rust/W5500.md](Rust/W5500.md).
 
+The source boundaries and repeatable SLOC comparison for native RMII, W5500
+MACRAW, and W5500 hardware-offload firmware are documented in
+[Rust/TRADE_STUDY.md](Rust/TRADE_STUDY.md).
+
 The implementation plan and live progress ledger for signed, rollback-safe
 Ethernet updates is in
 [ETHERNET_FIRMWARE_UPDATE_PLAN.md](ETHERNET_FIRMWARE_UPDATE_PLAN.md).

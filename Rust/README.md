@@ -488,11 +488,13 @@ by an unknown key. Detailed evidence remains in
 
 - `src/lib.rs`: hardware-independent constants and checked payload logic
 - `tests/host.rs`: host-side tests of the library's public production API
-- `src/main.rs`: clocks, board pins, Ethernet construction, and task startup
-- `src/bin/w5500_udp_echo.rs`: separate SPI W5500 shield executable
+- `src/board.rs`: clocks, shared board initialization, and MCUboot handoff
+- `src/bin/native_rmii_managed.rs`: native Ethernet, SSH, and update application
+- `src/bin/native_rmii_udp_echo.rs`: native Ethernet UDP-only comparison app
+- `src/bin/w5500_macraw_udp_echo.rs`: W5500 raw-frame/Embassy app
 - `src/bin/w5500_offload_udp_echo.rs`: W5500 hardware-socket/offload executable
-- `src/network.rs`: DHCP, static fallback, link state, and LEDs
-- `src/udp_echo.rs`: bounded-buffer UDP echo task
+- `src/bringup/`: device setup, DHCP, link state, and status LEDs
+- `src/servers/`: UDP behavior, separated from Ethernet bring-up
 - `src/ssh_server.rs`: Sunset authentication, channel handling, and commands
 - `src/firmware_update.rs`: bounded staging, read-back, activation, and confirmation
 - `build.rs`: converts provisioned key files into firmware constants
@@ -503,3 +505,7 @@ by an unknown key. Detailed evidence remains in
 - `tools/ethernet-flash.ps1`: authenticated Windows Ethernet-update client
 - `tools/provision_ssh.ps1`: persistent host and authorized-client key setup
 - `tools/udp_echo_test.ps1`: host-side binary UDP acceptance test
+- `tools/measure-variants.ps1`: repeatable bring-up/server NCLOC and image sizes
+
+See [TRADE_STUDY.md](TRADE_STUDY.md) for the controlled comparison among
+native RMII, W5500 MACRAW, and W5500 hardware-offload UDP firmware.
