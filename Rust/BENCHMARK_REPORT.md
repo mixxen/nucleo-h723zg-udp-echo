@@ -1,5 +1,10 @@
 # NUCLEO-H723ZG UDP benchmark report
 
+> Historical baseline: these tables intentionally preserve the original
+> 20 MHz, polling-based W5500 comparison. Current interrupt-driven and retained
+> performance results are in
+> [STREAM_BENCHMARK_REPORT.md](STREAM_BENCHMARK_REPORT.md).
+
 This report compares UDP-only release firmware using the same Windows host, LAN, packet format, and benchmark procedure. Latency is application round-trip time; throughput is correctly echoed UDP payload goodput.
 
 ## Executive summary

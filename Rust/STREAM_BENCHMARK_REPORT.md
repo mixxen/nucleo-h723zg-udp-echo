@@ -166,7 +166,7 @@ Embassy UDP server.
 | **Retained performance** | **520 MHz, speed (`3`)** | **40 MHz** | **I-cache + D-cache** | **1-9 kHz** | **about 10,634 valid/s** |
 
 The short-sweep clean boundary improved by 9x and the plateau by about 5.6x.
-At 10 kHz the optimized image returned 29,657/30,000 packets; above the
+At 10 kHz the latest optimized sweep returned 29,634/30,000 packets; above the
 plateau, p99 latency increased to approximately 12 ms as frames queued. The
 3-second 1 kHz point returned 3,000/3,000 with 0.312 ms p99, compared with
 0.687/1.761 ms p50/p99 in the earlier 30-second release-control run.
@@ -255,26 +255,30 @@ win for the 100-byte stream.
 
 ## Connected-board result
 
-Measured on 2026-08-12 and 2026-08-13 using the same Windows host, router, NUCLEO-H723ZG,
-cables, 20 MHz W5500 SPI clock, release optimization, and benchmark logging
-configuration:
+Measured on 2026-08-12 and 2026-08-13 using the same Windows host, router,
+NUCLEO-H723ZG, cables, and 100-byte/1 kHz workload. The rows intentionally
+state their firmware configuration and duration because the retained
+performance images are not configuration-identical to their controls:
 
-| Variant | Valid / sent | Missing | Late | Duplicate | Reordered | Corrupt | p50 RTT | p99 RTT | Max RTT |
-|---|---:|---:|---:|---:|---:|---:|---:|---:|---:|
-| C/LwIP native RMII | 30,000 / 30,000 | 0 | 0 | 0 | 0 | 0 | 0.118 ms | 0.352 ms | 9.436 ms |
-| Native RMII + Embassy | 30,000 / 30,000 | 0 | 0 | 0 | 0 | 0 | 0.278 ms | 0.369 ms | 16.173 ms |
-| Native RMII performance + full checksum offload | 30,000 / 30,000 | 0 | 0 | 0 | 0 | 0 | 0.146 ms | 0.220 ms | 1.831 ms |
-| W5500 MACRAW + Embassy | 30,000 / 30,000 | 0 | 0 | 0 | 0 | 0 | 0.687 ms | 1.761 ms | 31.528 ms |
-| W5500 hardware offload | 30,000 / 30,000 | 0 | 0 | 0 | 0 | 0 | 0.438 ms | 0.914 ms | 11.995 ms |
+| Variant | Configuration | Duration | Valid / sent | Missing | Late | Duplicate | Reordered | Corrupt | p50 RTT | p99 RTT | Max RTT |
+|---|---|---:|---:|---:|---:|---:|---:|---:|---:|---:|---:|
+| C/LwIP native RMII | 520 MHz, GCC `-O2` | 30 s | 30,000 / 30,000 | 0 | 0 | 0 | 0 | 0 | 0.118 ms | 0.352 ms | 9.436 ms |
+| Native RMII + Embassy control | 400 MHz, size (`z`) | 30 s | 30,000 / 30,000 | 0 | 0 | 0 | 0 | 0 | 0.278 ms | 0.369 ms | 16.173 ms |
+| **Native RMII retained performance** | **520 MHz, speed (`3`), full checksum offload** | **30 s** | **30,000 / 30,000** | **0** | **0** | **0** | **0** | **0** | **0.146 ms** | **0.220 ms** | **1.831 ms** |
+| W5500 MACRAW control | 400 MHz, 20 MHz SPI, size (`z`) | 30 s | 30,000 / 30,000 | 0 | 0 | 0 | 0 | 0 | 0.687 ms | 1.761 ms | 31.528 ms |
+| **W5500 MACRAW retained performance** | **520 MHz, 40 MHz SPI, speed (`3`), I/D-cache** | **3 s** | **3,000 / 3,000** | **0** | **0** | **0** | **0** | **0** | **0.230 ms** | **0.527 ms** | **2.192 ms** |
+| W5500 offload fresh control | 400 MHz, 20 MHz SPI, size (`z`) | 30 s | 30,000 / 30,000 | 0 | 0 | 0 | 0 | 0 | 0.296 ms | 0.403 ms | 3.439 ms |
+| **W5500 offload retained performance** | **520 MHz, 40 MHz SPI, speed (`3`), I/D-cache** | **3 s** | **3,000 / 3,000** | **0** | **0** | **0** | **0** | **0** | **0.194 ms** | **0.340 ms** | **1.834 ms** |
 
-All four met the short-run reliability gate and achieved exactly 1,000.000
-sent commands/s. C/LwIP native RMII had the lowest observed typical and tail
-RTT; Rust/Embassy native RMII was close at p99. W5500 offload was the better
-of the two SPI designs in this run. The ordinary Rust images use 400 MHz; the
-native performance row and C image use 520 MHz. These remain complete-stack
-implementation comparisons, not evidence that language alone caused a
-latency difference. Use repeatable one-hour and 8-hour runs before treating
-tail values as qualification data.
+Every row met the short-run 1 kHz reliability gate and achieved exactly the
+requested offered rate. The retained native image has a matched 30-second
+sample; the retained W5500 values come from the 1 kHz points of their latest
+3-second sweeps. Their latency maxima therefore must not be compared directly
+with the 30-second maxima. The latest samples show substantial latency gains
+for both W5500 paths, with hardware offload remaining faster than MACRAW.
+These are complete-stack implementation comparisons, not evidence that
+language alone caused a latency difference. Use matched repeatable one-hour
+and 8-hour runs before treating tail values as qualification data.
 
 ## Preliminary reliability knee
 
@@ -367,9 +371,11 @@ threshold.
 |---|---:|---:|---:|---:|---:|
 | C/LwIP native RMII | 620 | 29 | 649 | 126,824 B ELF flash | 53,051 B |
 | Native RMII + Embassy | 144 | 48 | 192 | 60,080 B signed | 29,488 B |
+| Native RMII retained performance | 144 | 48 | 192 | 71,608 B signed | 29,504 B |
 | W5500 MACRAW + Embassy | 269 | 48 | 317 | 66,816 B signed | 30,232 B |
 | W5500 MACRAW performance | 269 | 48 | 317 | 83,696 B signed | 30,240 B |
-| W5500 hardware offload | 262 | 60 | 322 | 25,896 B signed | 3,188 B |
+| W5500 hardware offload | 262 | 60 | 322 | 26,296 B signed | 3,204 B |
+| W5500 offload retained performance | 262 | 60 | 322 | 37,056 B signed | 3,196 B |
 
 Static MCU RAM is the release ELF's `.data + .bss + .uninit`; the W5500's
 external 32 KiB packet RAM is not counted. A separate `profiling` firmware
