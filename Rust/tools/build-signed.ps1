@@ -33,8 +33,8 @@ if ($Benchmark -and -not ($NativeUdp -or $W5500 -or $W5500Offload)) {
 if ($Profiling -and -not ($NativeUdp -or $W5500 -or $W5500Offload)) {
     throw "-Profiling requires -NativeUdp, -W5500, or -W5500Offload."
 }
-if ($Performance -and -not ($NativeUdp -or $W5500Offload)) {
-    throw "-Performance requires -NativeUdp or -W5500Offload."
+if ($Performance -and -not ($NativeUdp -or $W5500 -or $W5500Offload)) {
+    throw "-Performance requires -NativeUdp, -W5500, or -W5500Offload."
 }
 if ($Performance -and ($Profiling -or $Benchmark)) {
     throw "-Performance already disables packet logging; do not combine it with -Benchmark or -Profiling."

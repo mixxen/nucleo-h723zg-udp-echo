@@ -21,10 +21,10 @@ C-versus-Rust interpretation:
 
 | Parameter | C/LwIP native RMII | Rust/Embassy native RMII | Rust/Embassy W5500 MACRAW | Rust W5500 offload |
 |---|---|---|---|---|
-| MCU / AHB clock | 520 / 260 MHz | 400 / 200 MHz normally; 520 / 260 MHz with `performance` | 400 / 200 MHz | 400 / 200 MHz normally; 520 / 260 MHz with `performance` |
+| MCU / AHB clock | 520 / 260 MHz | 400 / 200 MHz normally; 520 / 260 MHz with `performance` | 400 / 200 MHz normally; 520 / 260 MHz with `performance` | 400 / 200 MHz normally; 520 / 260 MHz with `performance` |
 | MCU clock source | HSE bypass + PLL | HSI + PLL | HSI + PLL | HSI + PLL |
 | Ethernet device path | STM32 MAC + LAN8742A | STM32 MAC + LAN8742A | W5500 MACRAW | W5500 hardwired sockets |
-| MCU-to-Ethernet transport | RMII, 50 MHz reference | RMII, 50 MHz reference | SPI1, 20 MHz requested | SPI1, 50 MHz release; dedicated 40 MHz PLL2-P clock with `performance` |
+| MCU-to-Ethernet transport | RMII, 50 MHz reference | RMII, 50 MHz reference | SPI1, 20 MHz release; dedicated 40 MHz PLL2-P clock with `performance` | SPI1, 50 MHz release; dedicated 40 MHz PLL2-P clock with `performance` |
 | Physical Ethernet link | Negotiated 10/100 Mb/s | Negotiated 10/100 Mb/s | Negotiated 10/100 Mb/s | Negotiated 10/100 Mb/s |
 | IPv4/UDP stack location | MCU: LwIP raw API | MCU: Embassy network stack (`xarxa` at pinned revision) | MCU: Embassy network stack (`xarxa` at pinned revision) | W5500 hardware |
 | IPv4/UDP checksums | STM32 MAC hardware offload | STM32 MAC hardware RX/TX offload | MCU software | W5500 hardware |
@@ -34,8 +34,8 @@ C-versus-Rust interpretation:
 | DMA/raw-frame queues | 4 RX + 4 TX descriptors; 12 × 1,000-byte RX buffers | 4 RX + 4 TX packet queue | 4 RX + 4 TX MCU queues of 1,514-byte frames, plus W5500 memory | W5500 socket memory; allocation left at chip defaults |
 | UDP application buffers | LwIP pbufs; 14 KiB LwIP heap | 4 RX + 4 TX slots with 6,144-byte RX/TX storage; 1,536-byte work buffer | Same Embassy UDP buffers as native Rust | 1,536-byte MCU work buffer; W5500 socket RX/TX memory |
 | DHCP fallback | After more than 4 attempts: `192.168.0.10/24` | After 30 s: `192.168.0.10/24` | After 30 s: `192.168.0.10/24` | No static fallback |
-| Release optimization | GCC `-O2` | Rust `opt-level="z"` normally; `3` for `performance`; fat LTO | Rust `opt-level="z"`, fat LTO | Rust `opt-level="z"` normally; `3` for `performance`; fat LTO |
-| Cortex-M7 cache policy | I-cache + D-cache; DMA memory made non-cacheable by MPU | I-cache; D-cache off for DMA coherency | I-cache; D-cache off | I-cache normally; I-cache + D-cache with `performance` because the SPI path is CPU-driven |
+| Release optimization | GCC `-O2` | Rust `opt-level="z"` normally; `3` for `performance`; fat LTO | Rust `opt-level="z"` normally; `3` for `performance`; fat LTO | Rust `opt-level="z"` normally; `3` for `performance`; fat LTO |
+| Cortex-M7 cache policy | I-cache + D-cache; DMA memory made non-cacheable by MPU | I-cache; D-cache off for DMA coherency | I-cache normally; I-cache + D-cache with `performance` | I-cache normally; I-cache + D-cache with `performance` because the SPI path is CPU-driven |
 | Success-path logging during benchmark | None | Disabled | Disabled | Disabled |
 | Firmware CPU/stack telemetry | Not implemented | Optional profiling feature | Optional profiling feature | Optional profiling feature |
 
@@ -150,6 +150,40 @@ margin over the 1 kHz requirement. More repeated C trials are needed before
 interpreting the residual difference as architectural rather than host/LAN
 variation.
 
+## W5500 MACRAW optimization
+
+MACRAW now has a separate `performance` build so the original 400 MHz,
+20 MHz SPI, size-optimized release remains an unchanged control. The retained
+performance image applies the same low-risk board-level changes validated on
+offload: Cargo `opt-level=3`, 520/260 MHz MCU/AHB clocks, the independent
+40 MHz SPI1 clock, D-cache for the CPU-driven SPI path, and disabled
+success-path logging. It does not change the MACRAW protocol architecture or
+Embassy UDP server.
+
+| MACRAW stage | MCU | Effective SPI | Cache | Strict zero-error sweep | Saturation plateau |
+|---|---:|---:|---|---:|---:|
+| Release control | 400 MHz, size (`z`) | 20 MHz | I-cache | 1 kHz | about 1,900 valid/s |
+| **Retained performance** | **520 MHz, speed (`3`)** | **40 MHz** | **I-cache + D-cache** | **1-9 kHz** | **about 10,634 valid/s** |
+
+The short-sweep clean boundary improved by 9x and the plateau by about 5.6x.
+At 10 kHz the optimized image returned 29,657/30,000 packets; above the
+plateau, p99 latency increased to approximately 12 ms as frames queued. The
+3-second 1 kHz point returned 3,000/3,000 with 0.312 ms p99, compared with
+0.687/1.761 ms p50/p99 in the earlier 30-second release-control run.
+
+Longer boundary trials refined the operating margin: 9 kHz returned
+269,993/270,000 packets, while 8 kHz returned all 240,000 packets with
+0.505 ms p99. Therefore 8 kHz is the current conservative sustained point.
+An eight-frame-per-direction driver-queue experiment was rejected: its
+30-second 9 kHz run returned only 269,662/270,000 while consuming additional
+SRAM. The original four-frame queues were restored, showing that sustained
+raw-frame processing and SPI transactions—not queue depth—set the next
+bottleneck.
+
+The connected board passed 100 randomized binary echoes spanning 1, 100, and
+1,472 bytes, and live `CCR=0x00070210` confirmed both caches. The performance
+signed image is 83,696 bytes and uses 30,240 bytes of static MCU RAM.
+
 ## W5500 hardware-offload optimization
 
 The offload path was optimized separately using the current interrupt-driven
@@ -255,33 +289,34 @@ reordered, corrupt, foreign, or send-error packets.
 | Native RMII + Embassy | 1 through 7 kHz | 8 kHz | 21,462 / 24,000 valid; 2,538 error events |
 | Native RMII performance + full checksum offload | 1 through 11 kHz | 12 kHz | Host sent 35,999 / 36,000 planned; all sent packets valid |
 | W5500 MACRAW + Embassy | 1 kHz only | 2 kHz | 5,705 / 6,000 valid; 4,783 error events |
+| Optimized W5500 MACRAW | 1 through 9 kHz | 10 kHz | 29,657 / 30,000 valid; 343 missing |
 | W5500 hardware offload, fresh control | 1 through 7 kHz | 8 kHz | 21,104 / 24,000 valid; 2,896 missing |
 | Optimized W5500 hardware offload, 40 MHz SPI + D-cache | 1 through 15 kHz | 16 kHz | 46,269 / 48,000 valid; 1,731 missing |
 
 ### Error events at each increment
 
-| Target kHz | C/LwIP RMII | Rust/Embassy RMII | Rust performance + full checksum | W5500 offload | Optimized W5500 offload | W5500 MACRAW |
-|---:|---:|---:|---:|---:|---:|---:|
-| 1 | 0 | 0 | 0 | 0 | 0 | 0 |
-| 2 | 0 | 0 | 0 | 0 | 0 | 4,783 |
-| 3 | 0 | 0 | 0 | 0 | 0 | 8,777 |
-| 4 | 0 | 0 | 0 | 0 | 0 | 11,838 |
-| 5 | 0 | 0 | 0 | 0 | 0 | 14,864 |
-| 6 | 0 | 0 | 0 | 0 | 0 | 17,875 |
-| 7 | 0 | 0 | 0 | 0 | 0 | 20,883 |
-| 8 | 0 | 2,538 | 0 | 2,896 | 0 | 23,888 |
-| 9 | 0 | 6,969 | 0 | 5,894 | 0 | 26,892 |
-| 10 | 0 | 9,839 | 0 | 8,893 | 0 | 29,896 |
-| 11 | 0 | 15,042 | 0 | 11,897 | 0 | 32,896 |
-| 12 | 0 | 19,380 | 0 | 14,896 | 0 | 35,898 |
-| 13 | 0 | 23,235 | 1 | 17,897 | 0 | 38,900 |
-| 14 | 0 | 27,334 | 0 | 20,898 | 0 | 41,900 |
-| 15 | 0 | 31,350 | 0 | 23,898 | 0 | 44,903 |
-| 16 | 1 | 35,565 | 2 | 26,897 | 1,731 | 47,904 |
-| 17 | 0 | 39,568 | 1 | 29,896 | 4,747 | 50,904 |
-| 18 | 23 | 43,800 | 2 | 32,895 | 7,736 | 53,904 |
-| 19 | 0 | 47,876 | 2 | 35,894 | 10,731 | 56,904 |
-| 20 | 0 | 52,088 | 0 | 38,898 | 13,739 | 59,904 |
+| Target kHz | C/LwIP RMII | Rust/Embassy RMII | Rust performance + full checksum | W5500 offload | Optimized W5500 offload | W5500 MACRAW | Optimized MACRAW |
+|---:|---:|---:|---:|---:|---:|---:|---:|
+| 1 | 0 | 0 | 0 | 0 | 0 | 0 | 0 |
+| 2 | 0 | 0 | 0 | 0 | 0 | 4,783 | 0 |
+| 3 | 0 | 0 | 0 | 0 | 0 | 8,777 | 0 |
+| 4 | 0 | 0 | 0 | 0 | 0 | 11,838 | 0 |
+| 5 | 0 | 0 | 0 | 0 | 0 | 14,864 | 0 |
+| 6 | 0 | 0 | 0 | 0 | 0 | 17,875 | 0 |
+| 7 | 0 | 0 | 0 | 0 | 0 | 20,883 | 0 |
+| 8 | 0 | 2,538 | 0 | 2,896 | 0 | 23,888 | 0 |
+| 9 | 0 | 6,969 | 0 | 5,894 | 0 | 26,892 | 0 |
+| 10 | 0 | 9,839 | 0 | 8,893 | 0 | 29,896 | 343 |
+| 11 | 0 | 15,042 | 0 | 11,897 | 0 | 32,896 | 1,077 |
+| 12 | 0 | 19,380 | 0 | 14,896 | 0 | 35,898 | 4,093 |
+| 13 | 0 | 23,235 | 1 | 17,897 | 0 | 38,900 | 7,079 |
+| 14 | 0 | 27,334 | 0 | 20,898 | 0 | 41,900 | 10,100 |
+| 15 | 0 | 31,350 | 0 | 23,898 | 0 | 44,903 | 13,116 |
+| 16 | 1 | 35,565 | 2 | 26,897 | 1,731 | 47,904 | 16,086 |
+| 17 | 0 | 39,568 | 1 | 29,896 | 4,747 | 50,904 | 19,096 |
+| 18 | 23 | 43,800 | 2 | 32,895 | 7,736 | 53,904 | 22,105 |
+| 19 | 0 | 47,876 | 2 | 35,894 | 10,731 | 56,904 | 25,106 |
+| 20 | 0 | 52,088 | 0 | 38,898 | 13,739 | 59,904 | 28,096 |
 
 An error event is one missing, late, duplicate, reordered, corrupt, foreign,
 or send-error observation. A packet can contribute more than one event; for
@@ -294,6 +329,9 @@ and therefore did not achieve the exact requested offered load.
 The optimized W5500 column is the retained dedicated-40-MHz SPI plus D-cache
 run. Its 1-15 kHz points were all zero-error, and a separate 30-second 15 kHz
 dwell also returned all 450,000 packets.
+The optimized MACRAW column is its retained performance run. Its short sweep
+was clean through 9 kHz; the longer tests establish 8 kHz, rather than 9 kHz,
+as the conservative sustained point.
 
 These are preliminary knees from short trials. Confirm with the default
 30-second dwell, repeat the boundary rates, and use a longer soak at the
@@ -306,8 +344,9 @@ threshold.
 |---|---:|---:|---:|---:|---:|
 | C/LwIP native RMII | 620 | 29 | 649 | 126,824 B ELF flash | 53,051 B |
 | Native RMII + Embassy | 144 | 48 | 192 | 60,080 B signed | 29,488 B |
-| W5500 MACRAW + Embassy | 263 | 48 | 311 | 66,816 B signed | 30,232 B |
-| W5500 hardware offload | 261 | 53 | 314 | 25,896 B signed | 3,132 B |
+| W5500 MACRAW + Embassy | 269 | 48 | 317 | 66,816 B signed | 30,232 B |
+| W5500 MACRAW performance | 269 | 48 | 317 | 83,696 B signed | 30,240 B |
+| W5500 hardware offload | 262 | 60 | 322 | 25,896 B signed | 3,188 B |
 
 Static MCU RAM is the release ELF's `.data + .bss + .uninit`; the W5500's
 external 32 KiB packet RAM is not counted. A separate `profiling` firmware

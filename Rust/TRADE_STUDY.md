@@ -51,7 +51,7 @@ Current release-build results (2026-08-13):
 |---|---:|---:|---:|---:|---:|
 | C/LwIP native RMII | 620 | 29 | 649 | 126,824 | 53,051 |
 | Native RMII + Embassy | 144 | 48 | 192 | 59,420 | 29,488 |
-| W5500 MACRAW + Embassy | 264 | 48 | 312 | 66,160 | 30,232 |
+| W5500 MACRAW + Embassy | 269 | 48 | 317 | 66,160 | 30,232 |
 | W5500 hardware offload | 262 | 60 | 322 | 25,444 | 3,188 |
 
 Image size is not proportional to first-party NCLOC because it also contains
@@ -132,6 +132,22 @@ application NCLOC. The performance ELF occupies 70,948 bytes of flash and
 29,504 bytes of static MCU RAM, and its signed image is 71,608 bytes. See the
 controlled trials and limitations in
 [STREAM_BENCHMARK_REPORT.md](STREAM_BENCHMARK_REPORT.md#rustembassy-native-optimization).
+
+### Optimized W5500-MACRAW result
+
+MACRAW now has a separate performance build that retains raw Ethernet frames
+and the shared Embassy UDP stack while applying `opt-level=3`, 520/260 MHz
+MCU/AHB clocks, a dedicated 40 MHz SPI clock, D-cache, and disabled packet
+logging. Its short zero-error range increased from 1 kHz to 1-9 kHz, and its
+saturation plateau increased from approximately 1,900 to 10,634 valid
+packets/s. A 30-second 8 kHz run returned all 240,000 packets with 0.505 ms
+p99 RTT; the 9 kHz boundary missed 7 of 270,000.
+
+The performance signed image is 83,696 bytes with 30,240 bytes of static MCU
+RAM. An attempted increase from four to eight driver frames per direction was
+reverted after it worsened the 30-second 9 kHz result from 7 to 338 missing
+packets and consumed additional SRAM. The next bottleneck is sustained
+raw-frame processing and SPI transaction cost, not queue capacity.
 
 ### Optimized W5500-offload result
 

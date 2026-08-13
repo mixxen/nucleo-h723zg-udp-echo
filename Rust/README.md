@@ -184,6 +184,70 @@ classic four-bit MII.
 `MDIO` and `MDC` accompany RMII but do not carry frame payloads. Embassy uses
 them to configure the PHY and query information such as link status.
 
+### RMII, MACRAW, and hardware offload
+
+These names describe where Ethernet frames and the network protocols are
+processed, and what crosses the boundary between the STM32 and the Ethernet
+device:
+
+- **RMII — Reduced Media-Independent Interface:** the digital hardware link
+  between the STM32's built-in Ethernet MAC and the external LAN8742A PHY.
+  It carries raw Ethernet-frame data over a two-bit transmit and receive bus
+  with a 50 MHz reference clock, using fewer pins than classic MII.
+- **MACRAW — MAC Raw mode:** a W5500 mode that exposes complete raw Ethernet
+  frames through a special socket. The W5500 supplies the Ethernet MAC, PHY,
+  and packet memory, but the STM32 receives those frames over SPI and runs
+  ARP, DHCP, IPv4, ICMP, and UDP in Embassy.
+- **Hardware offload:** the W5500 processes Ethernet, ARP, IPv4, UDP framing,
+  checksums, and socket buffering in hardware. The STM32 exchanges socket
+  commands and decoded UDP payloads over SPI. The DHCP state machine and UDP
+  echo application still run on the STM32, but complete Ethernet frames do
+  not cross SPI.
+
+The three project architectures are therefore:
+
+```text
+Native RMII
+
+UDP/IP stack on STM32
+        |
+STM32 Ethernet MAC
+        |
+       RMII
+        |
+LAN8742A PHY
+        |
+Ethernet cable
+```
+
+```text
+W5500 MACRAW
+
+UDP/IP stack on STM32
+        |
+Raw Ethernet frames over SPI
+        |
+W5500 MAC + PHY
+        |
+Ethernet cable
+```
+
+```text
+W5500 hardware offload
+
+DHCP state machine + UDP application on STM32
+        |
+Socket commands + UDP payloads over SPI
+        |
+W5500 Ethernet + ARP/IPv4/UDP engine + PHY
+        |
+Ethernet cable
+```
+
+RMII and SPI are physical MCU-to-device transports. MACRAW and offload are
+W5500 operating models: MACRAW keeps the network stack on the STM32, while
+offload moves most packet processing into the W5500.
+
 ## Windows prerequisites
 
 Install Rust and the VS Code Rust extension:
@@ -588,8 +652,20 @@ speed-oriented native image:
 This selects Cargo `opt-level=3`, disables successful-packet logging, runs the
 STM32H723 at 520 MHz with a 260 MHz AHB, and retains Embassy's interrupt-driven
 Ethernet architecture. It does not change the managed application or W5500
-MACRAW build. See the optimization results in
+release builds. See the optimization results in
 [STREAM_BENCHMARK_REPORT.md](STREAM_BENCHMARK_REPORT.md#rustembassy-native-optimization).
+
+The W5500 MACRAW application has a performance build that uses the same
+520/260 MHz clocks and compiler optimization, plus the validated 40 MHz SPI
+clock and D-cache for its CPU-driven SPI path:
+
+```powershell
+.\Rust\tools\build-signed.ps1 -Version 0.4.5 -W5500 -Performance
+.\Rust\tools\flash.ps1 -SkipBuild -W5500 -Performance
+```
+
+Results are in
+[STREAM_BENCHMARK_REPORT.md](STREAM_BENCHMARK_REPORT.md#w5500-macraw-optimization).
 
 The W5500 hardwired-socket application has an equivalent performance build:
 
@@ -601,7 +677,7 @@ The W5500 hardwired-socket application has an equivalent performance build:
 That image uses the same MCU/AHB clock and compiler optimization, while an
 independent PLL2-P kernel clocks SPI1 at a board-validated 40 MHz. A 50 MHz
 combined-clock trial did not acquire DHCP through the stacked shield headers.
-The performance build also enables D-cache because this blocking SPI path is
+Both W5500 performance builds enable D-cache because their SPI paths are
 CPU-driven; native RMII keeps D-cache off to preserve DMA coherency.
 Results are in
 [STREAM_BENCHMARK_REPORT.md](STREAM_BENCHMARK_REPORT.md#w5500-hardware-offload-optimization).

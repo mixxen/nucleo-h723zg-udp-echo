@@ -74,6 +74,9 @@ jobs:
       - name: Lint profiled W5500 MACRAW firmware
         run: cargo clippy --locked --release --no-default-features --features wiznet,profiling --bin nucleo-h723zg-w5500-udp-echo -- -D warnings
 
+      - name: Lint performance-mode W5500 MACRAW firmware
+        run: cargo clippy --locked --profile performance --no-default-features --features wiznet,performance --bin nucleo-h723zg-w5500-udp-echo -- -D warnings
+
       - name: Lint W5500 hardware-offload firmware
         run: cargo clippy --locked --release --no-default-features --features wiznet-offload --bin nucleo-h723zg-w5500-offload-udp-echo -- -D warnings
 

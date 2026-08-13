@@ -78,13 +78,13 @@ pub fn init(needs_spi1_clock: bool) -> Peripherals {
     let mut core = unsafe { cortex_m::Peripherals::steal() };
     core.SCB.enable_icache();
 
-    // The performance W5500-offload path moves every SPI byte through the
-    // CPU; it has no Ethernet or SPI DMA engine accessing cached buffers
-    // behind Rust's back. D-cache is therefore coherent for this variant and
+    // Both performance W5500 paths move every SPI byte through the CPU; they
+    // have no Ethernet or SPI DMA engine accessing cached buffers behind
+    // Rust's back. D-cache is therefore coherent for these variants and
     // avoids repeatedly fetching stack, socket, and payload data from SRAM.
     // Keep it disabled for native RMII because that MAC does use DMA and its
     // packet buffers do not yet have cache maintenance or an MPU exception.
-    if cfg!(feature = "wiznet-offload") && performance_clock {
+    if (cfg!(feature = "wiznet") || cfg!(feature = "wiznet-offload")) && performance_clock {
         core.SCB.enable_dcache(&mut core.CPUID);
     }
 

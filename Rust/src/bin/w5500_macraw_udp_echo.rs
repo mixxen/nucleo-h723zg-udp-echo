@@ -54,7 +54,15 @@ async fn main(spawner: Spawner) -> ! {
 
     let ready_led = Output::new(p.PE1, Level::Low, Speed::Low);
     let error_led = Output::new(p.PB14, Level::High, Speed::Low);
-    let spi = w5500_spi::new(p.SPI1, p.PA5, p.PB5, p.PA6, p.PD14, 20_000_000);
+    // The normal image preserves the measured 20 MHz baseline. Performance
+    // mode requests 50 MHz from its independent 80 MHz kernel clock, which
+    // selects SPI's /2 divider and produces the board-validated 40 MHz rate.
+    let spi_frequency = if cfg!(feature = "performance") {
+        50_000_000
+    } else {
+        20_000_000
+    };
+    let spi = w5500_spi::new(p.SPI1, p.PA5, p.PB5, p.PA6, p.PD14, spi_frequency);
     // W5500 INTn is active-low. The WIZnet shield routes it through Arduino
     // D2, which is PG14/EXTI14 on the NUCLEO-H723ZG.
     let interrupt = ExtiInput::new(p.PG14, p.EXTI14, Pull::Up, Irqs);
