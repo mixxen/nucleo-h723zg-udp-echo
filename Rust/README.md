@@ -591,6 +591,15 @@ Ethernet architecture. It does not change the managed application or either
 W5500 build. See the optimization results in
 [STREAM_BENCHMARK_REPORT.md](STREAM_BENCHMARK_REPORT.md#rustembassy-native-optimization).
 
+All Embassy crates are patched together to the exact reviewed upstream
+revision `0af1937a5ac77f52fea943b677088c38ef9e91c6`. That revision adds complete
+STM32H7 RX/TX checksum offload that was not present in the published
+`embassy-stm32` 0.6.0 source used previously. The exact revision and
+`Cargo.lock` make builds repeatable; use `--locked`, and review/rebenchmark
+before changing the pin. `cortex-m` and `cortex-m-rt` are also held to the
+versions in `Cargo.toml` because the next `cortex-m` patch release caused an
+out-of-range inline-assembly relocation with this linker layout.
+
 The CPU figure is the percentage of wall-clock CPU cycles spent polling
 Embassy executor tasks. It is unavailable for the C/LwIP image and deliberately excludes interrupt-handler time, DMA,
 and work performed inside the W5500, so read it as *executor utilization*, not

@@ -101,11 +101,11 @@ embedded-io-async = "0.7.0"
 ed25519-dalek = { version = "2.2.0", default-features = false, features = ["zeroize"] }
 w5500-dhcp = { version = "0.7.0", features = ["defmt", "eh1"] }
 
-cortex-m = { version = "0.7.7", features = [
+cortex-m = { version = "=0.7.7", features = [
     "inline-asm",
     "critical-section-single-core",
 ] }
-cortex-m-rt = "0.7.5"
+cortex-m-rt = "=0.7.5"
 critical-section = "1.2.0"
 defmt = "1.0.1"
 defmt-rtt = "1.0.0"
@@ -136,3 +136,14 @@ overflow-checks = false
 [profile.performance]
 inherits = "release"
 opt-level = 3
+
+# Embassy main contains STM32H7 RX/TX checksum offload that has not yet been
+# published after 0.6.0. Pin the exact reviewed revision; do not follow main.
+[patch.crates-io]
+embassy-executor = { git = "https://github.com/embassy-rs/embassy.git", rev = "0af1937a5ac77f52fea943b677088c38ef9e91c6" }
+embassy-futures = { git = "https://github.com/embassy-rs/embassy.git", rev = "0af1937a5ac77f52fea943b677088c38ef9e91c6" }
+embassy-net = { git = "https://github.com/embassy-rs/embassy.git", rev = "0af1937a5ac77f52fea943b677088c38ef9e91c6" }
+embassy-net-wiznet = { git = "https://github.com/embassy-rs/embassy.git", rev = "0af1937a5ac77f52fea943b677088c38ef9e91c6" }
+embassy-stm32 = { git = "https://github.com/embassy-rs/embassy.git", rev = "0af1937a5ac77f52fea943b677088c38ef9e91c6" }
+embassy-sync = { git = "https://github.com/embassy-rs/embassy.git", rev = "0af1937a5ac77f52fea943b677088c38ef9e91c6" }
+embassy-time = { git = "https://github.com/embassy-rs/embassy.git", rev = "0af1937a5ac77f52fea943b677088c38ef9e91c6" }

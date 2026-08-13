@@ -26,15 +26,15 @@ C-versus-Rust interpretation:
 | Ethernet device path | STM32 MAC + LAN8742A | STM32 MAC + LAN8742A | W5500 MACRAW | W5500 hardwired sockets |
 | MCU-to-Ethernet transport | RMII, 50 MHz reference | RMII, 50 MHz reference | SPI1, 20 MHz | SPI1, 20 MHz |
 | Physical Ethernet link | Negotiated 10/100 Mb/s | Negotiated 10/100 Mb/s | Negotiated 10/100 Mb/s | Negotiated 10/100 Mb/s |
-| IPv4/UDP stack location | MCU: LwIP raw API | MCU: Embassy/smoltcp | MCU: Embassy/smoltcp | W5500 hardware |
-| IPv4/UDP checksums | STM32 MAC hardware offload | MCU software | MCU software | W5500 hardware |
+| IPv4/UDP stack location | MCU: LwIP raw API | MCU: Embassy network stack (`xarxa` at pinned revision) | MCU: Embassy network stack (`xarxa` at pinned revision) | W5500 hardware |
+| IPv4/UDP checksums | STM32 MAC hardware offload | STM32 MAC hardware RX/TX offload | MCU software | W5500 hardware |
 | Packet receive servicing | Tight-loop `ethernetif_input()` polling of DMA completion | STM32 Ethernet interrupt + DMA; async task wake | W5500 INTn on PG14/EXTI14 | W5500 INTn on PG14/EXTI14 |
 | Normal packet polling period | No fixed period; runs once per main-loop iteration | None; event driven | None; event driven | None; event driven |
 | Link/maintenance cadence | Link 100 ms; DHCP 500 ms | PHY link check 500 ms; DHCP timeout 30 s | W5500 link check 500 ms; DHCP by Embassy | DHCP/link recovery 1 s or socket interrupt |
 | DMA/raw-frame queues | 4 RX + 4 TX descriptors; 12 × 1,000-byte RX buffers | 4 RX + 4 TX packet queue | 4 RX + 4 TX MCU queues of 1,514-byte frames, plus W5500 memory | W5500 socket memory; allocation left at chip defaults |
 | UDP application buffers | LwIP pbufs; 14 KiB LwIP heap | 4 RX + 4 TX slots with 6,144-byte RX/TX storage; 1,536-byte work buffer | Same Embassy UDP buffers as native Rust | 1,536-byte MCU work buffer; W5500 socket RX/TX memory |
 | DHCP fallback | After more than 4 attempts: `192.168.0.10/24` | After 30 s: `192.168.0.10/24` | After 30 s: `192.168.0.10/24` | No static fallback |
-| Release optimization | GCC `-O2` | Rust `opt-level="z"`, fat LTO | Rust `opt-level="z"`, fat LTO | Rust `opt-level="z"`, fat LTO |
+| Release optimization | GCC `-O2` | Rust `opt-level="z"` normally; `3` for `performance`; fat LTO | Rust `opt-level="z"`, fat LTO | Rust `opt-level="z"`, fat LTO |
 | Cortex-M7 cache policy | I-cache + D-cache; DMA memory made non-cacheable by MPU | I-cache; D-cache off for DMA coherency | I-cache; D-cache off for SPI DMA coherency | I-cache; D-cache off for SPI DMA coherency |
 | Success-path logging during benchmark | None | Disabled | Disabled | Disabled |
 | Firmware CPU/stack telemetry | Not implemented | Optional profiling feature | Optional profiling feature | Optional profiling feature |
@@ -54,7 +54,7 @@ trade, but they prevent attributing a result to programming language alone.
 ## Rust/Embassy native optimization
 
 The existing Embassy path was optimized before considering a separate
-polling implementation. Four changes were retained:
+polling implementation. Five changes were retained:
 
 1. a separate Cargo `performance` profile uses `opt-level=3` while leaving the
    production release optimized for size;
@@ -62,7 +62,10 @@ polling implementation. Four changes were retained:
    rates as the C sample; and
 3. four UDP metadata entries now have four datagrams' worth of byte storage,
    rather than competing for one 1,536-byte buffer; and
-4. the Cortex-M7 instruction cache is enabled after Embassy initialization.
+4. the Cortex-M7 instruction cache is enabled after Embassy initialization;
+   and
+5. Embassy is pinned to reviewed revision `0af1937a`, whose STM32H7 driver
+   enables full IPv4/TCP/UDP checksum insertion and validation in the MAC.
 
 | Rust stage | CPU | Optimization | UDP byte capacity | Continuous zero-error range (3 s/rate) | 20 kHz errors |
 |---|---:|---|---:|---:|---:|
@@ -71,6 +74,15 @@ polling implementation. Four changes were retained:
 | Speed compiler + socket queues | 400 MHz | speed (`3`) | 4 datagrams/direction | 1-10 kHz | 8,053 |
 | Final: speed + queues + clock parity | 520 MHz | speed (`3`) | 4 datagrams/direction | 1-12 kHz | 103 |
 | I-cache pass (separate run) | 520 MHz | speed (`3`) + I-cache | 4 datagrams/direction | 1-11 kHz | 63 |
+| RX checksum offload experiment | 520 MHz | speed (`3`) + I-cache + MAC RX checks | 4 datagrams/direction | 1-10 kHz | 11 |
+| **Retained full RX/TX checksum offload** | **520 MHz** | **speed (`3`) + I-cache + MAC RX/TX checks** | **4 datagrams/direction** | **1-11 kHz** | **0** |
+
+The RX-only checksum row records a reverted controlled experiment. The full
+RX/TX row is the retained firmware configuration. Its strict continuous
+range stops at 11 kHz only because the Windows sender produced 35,999 rather
+than 36,000 packets at 12 kHz; the board lost none of the packets actually
+sent. The same sweep was lossless at 14, 15, and 20 kHz, so the strict range
+is useful for automation but is not a monotonic saturation boundary.
 
 The pre-cache final sweep was non-monotonic: 13 and 14 kHz each lost one or two packets,
 15 and 16 kHz were zero-error, and 20 kHz returned 59,897 of 60,000 packets.
@@ -99,24 +111,44 @@ so the experiment was fully reverted. D-cache must remain disabled until the
 driver performs explicit clean/invalidate maintenance or a separately tested
 DMA-memory layout is available.
 
-A matched 30-second 15 kHz run returned 449,939/450,000 packets for optimized
-Rust (61 missing, 0.0136% loss) versus 450,000/450,000 for C. Rust p50/p99 RTT
-was 0.276/0.383 ms; C was 0.124/0.218 ms. This is close enough in throughput
-to retain Embassy for now: the optimized Rust implementation delivered
-99.986% of replies at 15 kHz and both implementations are comfortably above
-the 1 kHz target. A new polling stack would add substantial code and safety
-risk for a margin that the application does not currently require.
+An RX-checksum-offload experiment then enabled `MACCR.IPC`, kept
+`MTLRXQOMR.DIS_TCP_EF` clear so the MAC dropped checksum-error packets, and
+wrapped Embassy's driver capabilities so smoltcp generated TX checksums but
+trusted hardware on RX. Live registers confirmed both settings and 100
+functional datagrams spanning 0 through 1,472 bytes passed. The short sweep
+had only 11 errors at 20 kHz, but one miss at 11 kHz made its strict
+zero-error range 1-10 kHz. Three 30-second 15 kHz trials missed 87, 87, and 55
+of 450,000 packets (76 average), which overlaps the previous 61-82 range. Two
+30-second 20 kHz trials missed 323 and 335 of 600,000 packets. Because RX-only
+offload added about 55 integration lines and a direct PAC dependency without
+a demonstrated delivery improvement, it was reverted. A malformed-checksum
+injection test could not run because Windows denied creation of the required
+raw socket without elevation; the hardware configuration itself was verified
+through live registers.
 
-The next optimization should be STM32 Ethernet checksum offload in the
-Embassy driver, followed by repeated 15 and 20 kHz trials. A specialized
-polling/raw-frame Rust path remains a fallback only if a future requirement
-demands zero loss near saturation; it is not justified by the current 1 kHz
-control workload.
+A matched 30-second 15 kHz run before full offload returned
+449,939/450,000 packets for optimized Rust (61 missing, 0.0136% loss) versus
+450,000/450,000 for C. Rust p50/p99 RTT was 0.276/0.383 ms; C was
+0.124/0.218 ms.
 
-At the target 1 kHz rate, the final image returned 30,000/30,000 packets with
-no errors and a 0.193 ms median RTT. Its 0.824 ms p99 and 19.716 ms maximum in
-that run reinforce that Windows/LAN tail latency needs repeated trials even
-when delivery is complete.
+The retained upstream Embassy driver sets `CIC=0b11` in every TX descriptor,
+enables `MACCR.IPC`, rejects hardware-reported RX checksum failures, and tells
+the IP stack not to repeat those checks in software. The board passed 200
+binary echo requests across 0, 1, 100, and 1,472-byte payloads, and live
+`MACCR=0x0810e003` confirmed that IPC was enabled. Three 30-second trials at
+15 kHz missed 2, 4, and 20 of 450,000 packets (8.7 average), an 89% reduction
+from the RX-only experiment's 76-packet average. Their p99 RTTs were
+0.287, 0.284, and 0.315 ms. Two 30-second 20 kHz trials missed 36 and 240 of
+600,000 packets, compared with 323 and 335 during RX-only offload. At 1 kHz,
+the retained image returned 30,000/30,000 with 0.146/0.220 ms p50/p99 RTT.
+
+These results bring the existing async path close enough to C that a second
+polling/raw-frame implementation is not justified now. C remained perfect in
+its single 15 kHz comparison and had a lower 0.218 ms p99, but full-offload
+Rust delivered 99.9981% on average across three trials and has substantial
+margin over the 1 kHz requirement. More repeated C trials are needed before
+interpreting the residual difference as architectural rather than host/LAN
+variation.
 
 ## Connected-board result
 
@@ -128,16 +160,18 @@ configuration:
 |---|---:|---:|---:|---:|---:|---:|---:|---:|---:|
 | C/LwIP native RMII | 30,000 / 30,000 | 0 | 0 | 0 | 0 | 0 | 0.118 ms | 0.352 ms | 9.436 ms |
 | Native RMII + Embassy | 30,000 / 30,000 | 0 | 0 | 0 | 0 | 0 | 0.278 ms | 0.369 ms | 16.173 ms |
+| Native RMII performance + full checksum offload | 30,000 / 30,000 | 0 | 0 | 0 | 0 | 0 | 0.146 ms | 0.220 ms | 1.831 ms |
 | W5500 MACRAW + Embassy | 30,000 / 30,000 | 0 | 0 | 0 | 0 | 0 | 0.687 ms | 1.761 ms | 31.528 ms |
 | W5500 hardware offload | 30,000 / 30,000 | 0 | 0 | 0 | 0 | 0 | 0.438 ms | 0.914 ms | 11.995 ms |
 
 All four met the short-run reliability gate and achieved exactly 1,000.000
 sent commands/s. C/LwIP native RMII had the lowest observed typical and tail
 RTT; Rust/Embassy native RMII was close at p99. W5500 offload was the better
-of the two SPI designs in this run. The C image runs the MCU at 520 MHz while
-the Rust images use 400 MHz, so this is an implementation comparison, not
-evidence that language alone caused the latency difference. Use repeatable
-one-hour and 8-hour runs before treating tail values as qualification data.
+of the two SPI designs in this run. The ordinary Rust images use 400 MHz; the
+native performance row and C image use 520 MHz. These remain complete-stack
+implementation comparisons, not evidence that language alone caused a
+latency difference. Use repeatable one-hour and 8-hour runs before treating
+tail values as qualification data.
 
 ## Preliminary reliability knee
 
@@ -150,38 +184,43 @@ reordered, corrupt, foreign, or send-error packets.
 |---|---:|---:|---|
 | C/LwIP native RMII | 1 through 15 kHz | 16 kHz | 47,999 / 48,000 valid; 1 missing |
 | Native RMII + Embassy | 1 through 7 kHz | 8 kHz | 21,462 / 24,000 valid; 2,538 error events |
+| Native RMII performance + full checksum offload | 1 through 11 kHz | 12 kHz | Host sent 35,999 / 36,000 planned; all sent packets valid |
 | W5500 MACRAW + Embassy | 1 kHz only | 2 kHz | 5,705 / 6,000 valid; 4,783 error events |
 | W5500 hardware offload | 1 through 3 kHz | 4 kHz | 10,215 / 12,000 valid; 1,785 error events |
 
 ### Error events at each increment
 
-| Target kHz | C/LwIP RMII | Rust/Embassy RMII | W5500 offload | W5500 MACRAW |
-|---:|---:|---:|---:|---:|
-| 1 | 0 | 0 | 0 | 0 |
-| 2 | 0 | 0 | 0 | 4,783 |
-| 3 | 0 | 0 | 0 | 8,777 |
-| 4 | 0 | 0 | 1,785 | 11,838 |
-| 5 | 0 | 0 | 4,785 | 14,864 |
-| 6 | 0 | 0 | 7,785 | 17,875 |
-| 7 | 0 | 0 | 10,785 | 20,883 |
-| 8 | 0 | 2,538 | 13,787 | 23,888 |
-| 9 | 0 | 6,969 | 16,785 | 26,892 |
-| 10 | 0 | 9,839 | 19,785 | 29,896 |
-| 11 | 0 | 15,042 | 22,784 | 32,896 |
-| 12 | 0 | 19,380 | 25,785 | 35,898 |
-| 13 | 0 | 23,235 | 28,785 | 38,900 |
-| 14 | 0 | 27,334 | 31,785 | 41,900 |
-| 15 | 0 | 31,350 | 34,782 | 44,903 |
-| 16 | 1 | 35,565 | 37,784 | 47,904 |
-| 17 | 0 | 39,568 | 40,784 | 50,904 |
-| 18 | 23 | 43,800 | 43,785 | 53,904 |
-| 19 | 0 | 47,876 | 46,787 | 56,904 |
-| 20 | 0 | 52,088 | 49,785 | 59,904 |
+| Target kHz | C/LwIP RMII | Rust/Embassy RMII | Rust performance + full checksum | W5500 offload | W5500 MACRAW |
+|---:|---:|---:|---:|---:|---:|
+| 1 | 0 | 0 | 0 | 0 | 0 |
+| 2 | 0 | 0 | 0 | 0 | 4,783 |
+| 3 | 0 | 0 | 0 | 0 | 8,777 |
+| 4 | 0 | 0 | 0 | 1,785 | 11,838 |
+| 5 | 0 | 0 | 0 | 4,785 | 14,864 |
+| 6 | 0 | 0 | 0 | 7,785 | 17,875 |
+| 7 | 0 | 0 | 0 | 10,785 | 20,883 |
+| 8 | 0 | 2,538 | 0 | 13,787 | 23,888 |
+| 9 | 0 | 6,969 | 0 | 16,785 | 26,892 |
+| 10 | 0 | 9,839 | 0 | 19,785 | 29,896 |
+| 11 | 0 | 15,042 | 0 | 22,784 | 32,896 |
+| 12 | 0 | 19,380 | 0 | 25,785 | 35,898 |
+| 13 | 0 | 23,235 | 1 | 28,785 | 38,900 |
+| 14 | 0 | 27,334 | 0 | 31,785 | 41,900 |
+| 15 | 0 | 31,350 | 0 | 34,782 | 44,903 |
+| 16 | 1 | 35,565 | 2 | 37,784 | 47,904 |
+| 17 | 0 | 39,568 | 1 | 40,784 | 50,904 |
+| 18 | 23 | 43,800 | 2 | 43,785 | 53,904 |
+| 19 | 0 | 47,876 | 2 | 46,787 | 56,904 |
+| 20 | 0 | 52,088 | 0 | 49,785 | 59,904 |
 
 An error event is one missing, late, duplicate, reordered, corrupt, foreign,
 or send-error observation. A packet can contribute more than one event; for
 example, MACRAW at 2 kHz recorded 295 missing and 4,488 late events. The CSV
 output preserves that detailed breakdown rather than only the total.
+The optimized Rust run has zero error events at 12 kHz because every packet
+actually sent was returned correctly, but it is still marked unreliable in
+the preceding table: the Windows host sent 35,999 of 36,000 planned packets
+and therefore did not achieve the exact requested offered load.
 
 These are preliminary knees from short trials. Confirm with the default
 30-second dwell, repeat the boundary rates, and use a longer soak at the
@@ -215,6 +254,11 @@ checked-in integration burden, not the total implementation size of either
 language ecosystem. C's image is an unsigned ELF footprint; Rust's column is
 the signed MCUboot artifact, so use the RAM and NCLOC columns for the cleaner
 source-level comparison.
+
+The retained native performance image uses 70,948 bytes of ELF flash,
+29,504 bytes of static MCU RAM, and a 71,608-byte signed artifact. Checksum
+offload was obtained by updating an external driver revision, so it adds no
+first-party bring-up or UDP-server NCLOC.
 
 ## Reproduction
 

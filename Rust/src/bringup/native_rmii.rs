@@ -12,7 +12,7 @@ use nucleo_h723zg_udp_echo::MAC_ADDRESS;
 use static_cell::StaticCell;
 
 bind_interrupts!(struct EthernetInterrupts {
-    ETH => eth::InterruptHandler;
+    ETH => eth::InterruptHandler<ETH>;
 });
 
 pub type Device = Ethernet<'static, ETH, GenericPhy<Sma<'static, ETH_SMA>>>;

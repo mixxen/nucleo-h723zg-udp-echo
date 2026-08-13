@@ -104,15 +104,34 @@ The most consequential current differences are:
 |---|---|---|
 | MCU / AHB clock | 520 / 260 MHz | 400 / 200 MHz normally; 520 / 260 MHz performance build |
 | Packet servicing | Unbounded main-loop polling | Ethernet interrupt + DMA wake |
-| Network stack | LwIP raw API | Embassy/smoltcp async |
+| Network stack | LwIP raw API | Embassy async (`xarxa` at pinned revision) |
 | Release optimization | GCC `-O2` | Rust size optimization (`z`) + fat LTO |
 | Cortex-M7 cache policy | I-cache + D-cache with MPU-isolated DMA memory | I-cache; D-cache disabled for DMA coherency |
+| IPv4/UDP checksums | STM32 MAC RX/TX offload | STM32 MAC RX/TX offload (pinned Embassy revision) |
 | Static MCU RAM | 53,051 B | 29,488 B |
 
 Accordingly, “C versus Rust” in this study means the complete C/LwIP/HAL and
 Rust/Embassy implementations as configured. A later language-isolation test
 should hold CPU/AHB clocks and optimization intent constant before drawing a
 language-specific performance conclusion.
+
+### Optimized native-RMII result
+
+The retained Rust performance build now aligns the CPU/AHB clocks at
+520/260 MHz, uses `opt-level=3`, enlarges the UDP queues, enables I-cache, and
+uses STM32 MAC RX/TX checksum offload. At the 1 kHz requirement it returned
+30,000/30,000 packets with 0.146 ms p50 and 0.220 ms p99 RTT. Three 30-second
+15 kHz trials missed 2, 4, and 20 packets out of 450,000 each (99.9981%
+average delivery); the C comparison missed 0 with 0.124/0.218 ms p50/p99.
+This is sufficiently close that the proposed duplicate polling/raw-frame
+Rust path is deferred. It would increase first-party complexity without a
+demonstrated requirement-level benefit.
+
+The checksum support comes from exact Embassy revision `0af1937a`; it adds no
+application NCLOC. The performance ELF occupies 70,948 bytes of flash and
+29,504 bytes of static MCU RAM, and its signed image is 71,608 bytes. See the
+controlled trials and limitations in
+[STREAM_BENCHMARK_REPORT.md](STREAM_BENCHMARK_REPORT.md#rustembassy-native-optimization).
 
 The previous MACRAW timer shim was removed, saving first-party bring-up code.
 Offload gained explicit socket-interrupt setup and safe flag clearing, so its

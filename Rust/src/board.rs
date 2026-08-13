@@ -18,34 +18,34 @@ pub fn init(needs_spi1_clock: bool) -> Peripherals {
 
         let native_performance = cfg!(feature = "performance") && !needs_spi1_clock;
 
-        config.rcc.hsi = Some(HSIPrescaler::DIV1);
+        config.rcc.hsi = Some(HSIPrescaler::Div1);
         config.rcc.csi = true;
         config.rcc.pll1 = Some(Pll {
-            source: PllSource::HSI,
+            source: PllSource::Hsi,
             prediv: if native_performance {
-                PllPreDiv::DIV8
+                PllPreDiv::Div8
             } else {
-                PllPreDiv::DIV4
+                PllPreDiv::Div4
             },
             mul: if native_performance {
-                PllMul::MUL65
+                PllMul::Mul65
             } else {
-                PllMul::MUL50
+                PllMul::Mul50
             },
             divp: Some(if native_performance {
-                PllDiv::DIV1
+                PllDiv::Div1
             } else {
-                PllDiv::DIV2
+                PllDiv::Div2
             }),
-            divq: needs_spi1_clock.then_some(PllDiv::DIV4),
+            divq: needs_spi1_clock.then_some(PllDiv::Div4),
             divr: None,
         });
-        config.rcc.sys = Sysclk::PLL1_P;
-        config.rcc.ahb_pre = AHBPrescaler::DIV2;
-        config.rcc.apb1_pre = APBPrescaler::DIV2;
-        config.rcc.apb2_pre = APBPrescaler::DIV2;
-        config.rcc.apb3_pre = APBPrescaler::DIV2;
-        config.rcc.apb4_pre = APBPrescaler::DIV2;
+        config.rcc.sys = Sysclk::Pll1P;
+        config.rcc.ahb_pre = AHBPrescaler::Div2;
+        config.rcc.apb1_pre = APBPrescaler::Div2;
+        config.rcc.apb2_pre = APBPrescaler::Div2;
+        config.rcc.apb3_pre = APBPrescaler::Div2;
+        config.rcc.apb4_pre = APBPrescaler::Div2;
         config.rcc.voltage_scale = if native_performance {
             VoltageScale::Scale0
         } else {
