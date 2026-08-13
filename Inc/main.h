@@ -33,8 +33,6 @@
 
 /* UDP local connection port */
 #define UDP_SERVER_PORT    7
-/* UDP remote connection port */
-#define UDP_CLIENT_PORT    7
 
 /*Static IP ADDRESS: IP_ADDR0.IP_ADDR1.IP_ADDR2.IP_ADDR3 */
 #define IP_ADDR0   ((uint8_t) 192U)

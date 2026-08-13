@@ -2,13 +2,14 @@
 
 ## Purpose
 
-Measure application-level latency, bandwidth, and reliability for three
+Measure application-level latency, bandwidth, and reliability for four
 NUCLEO-H723ZG UDP echo implementations under the same host, network, payload,
 and test procedure:
 
-1. native STM32 Ethernet MAC with RMII PHY and Embassy;
-2. W5500 MACRAW with Embassy; and
-3. W5500 hardwired UDP offload.
+1. native STM32 Ethernet MAC with RMII PHY and C/LwIP;
+2. native STM32 Ethernet MAC with RMII PHY and Rust/Embassy;
+3. W5500 MACRAW with Embassy; and
+4. W5500 hardwired UDP offload.
 
 The benchmark measures the complete round trip from the Windows computer,
 through the network and board firmware, and back. It is not a PHY-only or
@@ -48,7 +49,7 @@ workload.
 Keep these controls unchanged across variants:
 
 - same computer, NIC, switch/router, and cabling;
-- same release profile and firmware version;
+- optimized release builds (`-O2` for C and the Cargo release profile for Rust);
 - same payload sizes, durations, timeouts, and offered rates;
 - same W5500 SPI frequency (currently 20 MHz);
 - no debugger attached during recorded runs; and
@@ -58,7 +59,8 @@ Record the board IP and MAC for every run. Current DHCP observations are:
 
 | Interface | MAC | Last observed IP |
 |---|---|---|
-| Native RMII | `02-00-00-00-00-00` | `192.168.68.66` |
+| C/LwIP native RMII | `02-00-00-00-00-C0` | `192.168.68.119` |
+| Rust/Embassy native RMII | `02-00-00-00-00-00` | `192.168.68.117` |
 | W5500 | `02-00-00-00-55-00` | `192.168.68.74` |
 
 Addresses are DHCP-assigned and must not be assumed to remain constant.
@@ -142,10 +144,11 @@ Run one target directly:
     --output-dir .\Rust\benchmark-results\stream
 ```
 
-Or build, flash, and compare all three variants repeatably:
+Or build, flash, and compare all four variants repeatably:
 
 ```powershell
 .\Rust\tools\run-stream-benchmark-comparison.ps1 `
+    -CNativeIp 192.168.68.119 `
     -NativeIp 192.168.68.117 `
     -W5500Ip 192.168.68.74
 ```
@@ -153,6 +156,11 @@ Or build, flash, and compare all three variants repeatably:
 Use `-Quick` for a 30-second engineering check. The normal stream run is one
 hour; an 8-hour run is the release soak. DHCP addresses are examples, so
 verify the router leases before running the automated sequence.
+If both native images receive the same lease, omit `-CNativeIp`. The C build
+uses the sibling `STM32CubeH7` checkout by default; pass `-CubeRoot` when it
+lives elsewhere. Firmware-side executor CPU and stack high-water telemetry is
+reported only for the three instrumented Rust images; C rows retain blank
+values for those fields, while ELF flash and static RAM remain measurable.
 
 This is a transport surrogate, not a complete mirror-control acceptance
 test: the current board application echoes each command instead of decoding
@@ -349,7 +357,7 @@ should be fastest:
   region;
 - a 15-minute baseline soak has no corruption or duplicate replies;
 - every missing or late sequence is accounted for explicitly; and
-- results for all three variants can be reproduced from recorded commands and
+- results for all four stream variants can be reproduced from recorded commands and
   metadata.
 
 Performance targets should be established only after the first controlled
@@ -363,7 +371,7 @@ tolerance for Windows and LAN variability.
 3. Add concurrent receive, bounded windows, pacing, and throughput search.
 4. Add burst and soak modes with complete sequence accounting.
 5. Add the firmware `benchmark` feature to suppress per-packet logging.
-6. Run short validation tests against all three board images.
+6. Run short validation tests against all four board images.
 7. Run the controlled baseline and add its summary to `TRADE_STUDY.md`.
 8. Add optional recovery experiments and long-duration soak runs.
 
@@ -384,10 +392,10 @@ Implemented on 2026-08-12:
 - embedded `benchmark` feature that removes successful per-packet logging;
 - signed benchmark image selection in the build and flash scripts;
 - CI formatting, unit-test, Clippy, and benchmark-feature firmware checks;
-- automated three-image Windows runner in
+- automated three-image general-suite Windows runner in
   `tools/run-benchmark-comparison.ps1`; and
 - one controlled full baseline covering all three variants.
-- an exact 100-byte/1,000 Hz stream workload and repeatable three-image runner;
+- an exact 100-byte/1,000 Hz stream workload and repeatable four-image runner;
 - a 1 kHz-step command-rate sweep from 1 through 20 kHz that records the
   highest reliable and first unreliable rates;
 - interrupt-driven W5500 receive on Arduino D2 / PG14 / EXTI14, replacing the
@@ -395,6 +403,8 @@ Implemented on 2026-08-12:
 - ELF flash and MCU RAM measurement in `tools/measure-variants.ps1`; and
 - optional on-board executor CPU and runtime stack high-water telemetry for
   stream and stream-sweep profiling builds.
+- C/LwIP native-RMII build, flash, static-RAM measurement, and stream-runner
+  integration, with a distinct DHCP MAC address.
 
 The reviewed results and conclusions are in
 [BENCHMARK_REPORT.md](BENCHMARK_REPORT.md). The baseline used every initial

@@ -8,7 +8,8 @@ param(
     [switch]$W5500,
     [switch]$W5500Offload,
     [switch]$Benchmark,
-    [switch]$Profiling
+    [switch]$Profiling,
+    [switch]$Performance
 )
 
 $ErrorActionPreference = "Stop"
@@ -25,6 +26,12 @@ if ($Benchmark -and -not ($NativeUdp -or $W5500 -or $W5500Offload)) {
 if ($Profiling -and -not ($NativeUdp -or $W5500 -or $W5500Offload)) {
     throw "-Profiling requires -NativeUdp, -W5500, or -W5500Offload."
 }
+if ($Performance -and -not $NativeUdp) {
+    throw "-Performance currently requires -NativeUdp."
+}
+if ($Performance -and ($Profiling -or $Benchmark)) {
+    throw "-Performance already disables packet logging; do not combine it with -Benchmark or -Profiling."
+}
 
 if (-not $SkipBuild) {
     & (Join-Path $repositoryRoot "Bootloader\tools\build-mcuboot.ps1") `
@@ -40,7 +47,8 @@ if (-not $SkipBuild) {
         -W5500:$W5500 `
         -W5500Offload:$W5500Offload `
         -Benchmark:$Benchmark `
-        -Profiling:$Profiling
+        -Profiling:$Profiling `
+        -Performance:$Performance
     if ($LASTEXITCODE -ne 0) {
         throw "Signed application build failed."
     }
@@ -58,6 +66,8 @@ $signedApplicationName = if ($W5500Offload) {
 }
 if ($Profiling) {
     $signedApplicationName = $signedApplicationName.Replace("-signed.bin", "-profiling-signed.bin")
+} elseif ($Performance) {
+    $signedApplicationName = $signedApplicationName.Replace("-signed.bin", "-performance-signed.bin")
 } elseif ($Benchmark) {
     $signedApplicationName = $signedApplicationName.Replace("-signed.bin", "-benchmark-signed.bin")
 }

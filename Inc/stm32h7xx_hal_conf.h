@@ -213,7 +213,7 @@
 #define ETH_MAC_ADDR2    ((uint8_t)0x00)
 #define ETH_MAC_ADDR3    ((uint8_t)0x00)
 #define ETH_MAC_ADDR4    ((uint8_t)0x00)
-#define ETH_MAC_ADDR5    ((uint8_t)0x00)
+#define ETH_MAC_ADDR5    ((uint8_t)0xC0)
 
 /* ########################## Assert Selection ############################## */
 /**

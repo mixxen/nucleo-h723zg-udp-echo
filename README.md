@@ -12,8 +12,8 @@ does not modify the C application.
 An optional UDP-only build for the SPI-connected WIZnet W5500 Arduino shield
 is documented in [Rust/W5500.md](Rust/W5500.md).
 
-The source boundaries and repeatable SLOC comparison for native RMII, W5500
-MACRAW, and W5500 hardware-offload firmware are documented in
+The source boundaries and repeatable SLOC comparison for C/LwIP native RMII,
+Rust/Embassy native RMII, W5500 MACRAW, and W5500 hardware-offload firmware are documented in
 [Rust/TRADE_STUDY.md](Rust/TRADE_STUDY.md).
 
 The repeatable 100-byte stream benchmark, including 1 kHz reliability,
@@ -35,7 +35,7 @@ The board:
 
 - obtains an IPv4 address from DHCP;
 - listens for UDP datagrams on port 7; and
-- echoes each datagram to UDP port 7 on the client.
+- echoes each datagram back to the client's source address and port.
 
 The Rust version also runs a public-key-authenticated SSH management shell on
 TCP port 2222 and an isolated `firmware-update` SSH subsystem. The shell

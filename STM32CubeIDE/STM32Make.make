@@ -299,6 +299,23 @@ add_release_directory = $(sort $(addprefix $(RELEASE_DIRECTORY)/,$(addsuffix .$(
 OBJECTS = $(call add_release_directory,$(C_SOURCES),o)
 OBJECTS += $(call add_release_directory,$(CXX_SOURCES),o)
 OBJECTS += $(call add_release_directory,$(ASM_SOURCES),o)
+
+# The generated source list assumes this application still lives inside an
+# STM32CubeH7 checkout. Allow the standalone public repository to point at a
+# separate Cube tree while continuing to compile its own application sources.
+CUBE_ROOT ?= ../../../../../../
+APPLICATION_ROOT ?= ..
+C_SOURCES := $(subst ../../../../../../,$(CUBE_ROOT)/,$(C_SOURCES))
+C_SOURCES := $(subst ../Src,$(APPLICATION_ROOT)/Src,$(C_SOURCES))
+C_INCLUDES := $(subst ../../../../../../,$(CUBE_ROOT)/,$(C_INCLUDES))
+C_INCLUDES := $(subst -I../Src,-I$(APPLICATION_ROOT)/Src,$(C_INCLUDES))
+C_INCLUDES := $(subst -I../Inc,-I$(APPLICATION_ROOT)/Inc,$(C_INCLUDES))
+ifeq ($(DEBUG),0)
+  C_DEFS := $(filter-out -DDEBUG,$(C_DEFS))
+  CXX_DEFS := $(filter-out -DDEBUG,$(CXX_DEFS))
+  AS_DEFS := $(filter-out -DDEBUG,$(AS_DEFS))
+endif
+
 vpath %.c $(sort $(dir $(C_SOURCES)))
 vpath %.cc $(sort $(dir $(CXX_SOURCES)))
 vpath %.cp $(sort $(dir $(CXX_SOURCES)))

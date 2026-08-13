@@ -7,7 +7,9 @@
 use defmt::{info, unwrap, warn};
 use embassy_stm32::gpio::Output;
 use embassy_time::{Instant, Timer};
-use nucleo_h723zg_udp_echo::{PROFILING_PORT, UDP_ECHO_PORT, W5500_MAC_ADDRESS};
+#[cfg(feature = "profiling")]
+use nucleo_h723zg_udp_echo::PROFILING_PORT;
+use nucleo_h723zg_udp_echo::{UDP_ECHO_PORT, W5500_MAC_ADDRESS};
 use w5500_dhcp::hl::{Common, Udp};
 use w5500_dhcp::ll::eh1::vdm::W5500;
 use w5500_dhcp::ll::net::Eui48Addr;

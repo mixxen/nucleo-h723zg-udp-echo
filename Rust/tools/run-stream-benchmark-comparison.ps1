@@ -4,18 +4,32 @@ param(
     [string]$Version = "0.4.2",
     [Parameter(Mandatory)]
     [string]$NativeIp,
+    [string]$CNativeIp,
     [Parameter(Mandatory)]
     [string]$W5500Ip,
+    [string]$CubeRoot,
     [string]$OutputRoot,
     [switch]$SkipFirmwareBuild,
     [switch]$Quick
 )
 
 $ErrorActionPreference = "Stop"
+if (-not $CNativeIp) { $CNativeIp = $NativeIp }
 $rustRoot = Split-Path -Parent $PSScriptRoot
 $benchmarkRoot = Join-Path $PSScriptRoot "udp-benchmark"
 $hostTarget = "x86_64-pc-windows-msvc"
 $benchmarkExe = Join-Path $benchmarkRoot "target\$hostTarget\release\udp-benchmark.exe"
+
+function Get-CStaticRamBytes {
+    $elf = Join-Path (Split-Path -Parent $rustRoot) "STM32CubeIDE\build\release\LwIP_UDP_Echo_Server.elf"
+    $sizeTool = Get-ChildItem "$env:APPDATA\xPacks\@xpack-dev-tools\arm-none-eabi-gcc" `
+        -Recurse -Filter "arm-none-eabi-size.exe" | Select-Object -First 1 -ExpandProperty FullName
+    if (-not $sizeTool -or -not (Test-Path $elf)) { return $null }
+
+    $columns = ((& $sizeTool $elf | Select-Object -Last 1).Trim() -split "\s+")
+    if ($LASTEXITCODE -ne 0 -or $columns.Count -lt 3) { return $null }
+    return [int64]$columns[1] + [int64]$columns[2]
+}
 
 if (-not $OutputRoot) {
     $timestamp = Get-Date -Format "yyyyMMdd-HHmmss"
@@ -33,25 +47,37 @@ if ($LASTEXITCODE -ne 0) { throw "Benchmark tool tests failed." }
 if ($LASTEXITCODE -ne 0) { throw "Benchmark tool build failed." }
 
 $variants = @(
-    [pscustomobject]@{ Name = "Native RMII + Embassy"; Slug = "native-rmii"; Ip = $NativeIp; BuildSwitch = "NativeUdp" },
-    [pscustomobject]@{ Name = "W5500 MACRAW + Embassy"; Slug = "w5500-macraw"; Ip = $W5500Ip; BuildSwitch = "W5500" },
-    [pscustomobject]@{ Name = "W5500 hardware offload"; Slug = "w5500-offload"; Ip = $W5500Ip; BuildSwitch = "W5500Offload" }
+    [pscustomobject]@{ Name = "C/LwIP native RMII"; Slug = "c-lwip-native-rmii"; Ip = $CNativeIp; BuildSwitch = $null; Profile = $false },
+    [pscustomobject]@{ Name = "Rust native RMII + Embassy"; Slug = "native-rmii"; Ip = $NativeIp; BuildSwitch = "NativeUdp"; Profile = $true },
+    [pscustomobject]@{ Name = "Rust W5500 MACRAW + Embassy"; Slug = "w5500-macraw"; Ip = $W5500Ip; BuildSwitch = "W5500"; Profile = $true },
+    [pscustomobject]@{ Name = "Rust W5500 hardware offload"; Slug = "w5500-offload"; Ip = $W5500Ip; BuildSwitch = "W5500Offload"; Profile = $true }
 )
 
 $rows = @()
 $rateRows = @()
 foreach ($variant in $variants) {
     if (-not $SkipFirmwareBuild) {
-        $build = @{ Version = $Version; Profiling = $true }
-        $build[$variant.BuildSwitch] = $true
-        & (Join-Path $PSScriptRoot "build-signed.ps1") @build
+        if ($variant.Profile) {
+            $build = @{ Version = $Version; Profiling = $true }
+            $build[$variant.BuildSwitch] = $true
+            & (Join-Path $PSScriptRoot "build-signed.ps1") @build
+        } else {
+            $build = @{}
+            if ($CubeRoot) { $build.CubeRoot = $CubeRoot }
+            & (Join-Path $PSScriptRoot "build-c.ps1") @build
+        }
         if ($LASTEXITCODE -ne 0) { throw "Firmware build failed for $($variant.Name)." }
     }
 
-    $flash = @{ SkipBuild = $true; Profiling = $true }
-    $flash[$variant.BuildSwitch] = $true
-    & (Join-Path $PSScriptRoot "flash.ps1") @flash
+    if ($variant.Profile) {
+        $flash = @{ SkipBuild = $true; Profiling = $true }
+        $flash[$variant.BuildSwitch] = $true
+        & (Join-Path $PSScriptRoot "flash.ps1") @flash
+    } else {
+        & (Join-Path $PSScriptRoot "flash-c.ps1") -SkipBuild
+    }
     if ($LASTEXITCODE -ne 0) { throw "Firmware flash failed for $($variant.Name)." }
+    $cStaticRamBytes = if ($variant.Profile) { $null } else { Get-CStaticRamBytes }
 
     $ready = $false
     for ($attempt = 1; $attempt -le 30; $attempt++) {
@@ -64,13 +90,14 @@ foreach ($variant in $variants) {
     if (-not $ready) { throw "$($variant.Name) did not answer at $($variant.Ip). Check its DHCP lease." }
 
     $output = Join-Path $OutputRoot $variant.Slug
+    $profileArgument = if ($variant.Profile) { @("--profile") } else { @() }
     & $benchmarkExe stream --board $variant.Ip --payload-bytes 100 --rate-hz 1000 `
-        --duration-seconds $duration --interval-seconds $interval --profile --output-dir $output
+        --duration-seconds $duration --interval-seconds $interval @profileArgument --output-dir $output
     if ($LASTEXITCODE -ne 0) { throw "Stream benchmark failed for $($variant.Name)." }
 
     $sweepOutput = Join-Path $output "rate-sweep"
     & $benchmarkExe stream-sweep --board $variant.Ip --payload-bytes 100 `
-        --duration-seconds $sweepDuration --profile --output-dir $sweepOutput
+        --duration-seconds $sweepDuration @profileArgument --output-dir $sweepOutput
     if ($LASTEXITCODE -ne 0) { throw "Stream rate sweep failed for $($variant.Name)." }
 
     $stream = Get-Content (Join-Path $output "stream.json") | ConvertFrom-Json
@@ -93,7 +120,7 @@ foreach ($variant in $variants) {
             ExecutorCpuPercent = $point.profile.executor_cpu_percent
             CyclesPerValid = $point.profile.cycles_per_valid_packet
             StackHighWaterBytes = $point.profile.stack_high_water_bytes
-            StaticRamBytes = $point.profile.static_ram_bytes
+            StaticRamBytes = if ($variant.Profile) { $point.profile.static_ram_bytes } else { $cStaticRamBytes }
         }
     }
     $rows += [pscustomobject]@{
@@ -111,7 +138,7 @@ foreach ($variant in $variants) {
         ExecutorCpuPercent = $stream.profile.executor_cpu_percent
         CyclesPerValid = $stream.profile.cycles_per_valid_packet
         StackHighWaterBytes = $stream.profile.stack_high_water_bytes
-        StaticRamBytes = $stream.profile.static_ram_bytes
+        StaticRamBytes = if ($variant.Profile) { $stream.profile.static_ram_bytes } else { $cStaticRamBytes }
         HighestReliableKHz = if ($null -eq $sweep.highest_reliable_hz) { $null } else { $sweep.highest_reliable_hz / 1000 }
         FirstUnreliableKHz = if ($null -eq $sweep.first_unreliable_hz) { $null } else { $sweep.first_unreliable_hz / 1000 }
     }

@@ -10,6 +10,7 @@ if ($Benchmark -and $Profiling) {
 
 $ErrorActionPreference = "Stop"
 $rustRoot = Split-Path -Parent $PSScriptRoot
+$repositoryRoot = Split-Path -Parent $rustRoot
 $llvmSize = Get-ChildItem (Join-Path (rustc --print sysroot) "lib\rustlib") `
     -Recurse -Filter llvm-size.exe -ErrorAction SilentlyContinue |
     Select-Object -First 1 -ExpandProperty FullName
@@ -29,6 +30,31 @@ function Measure-CodeLines([string[]]$RelativePaths) {
     $count
 }
 
+function Measure-CCodeLines([string[]]$RelativePaths) {
+    $count = 0
+    foreach ($relativePath in $RelativePaths) {
+        $path = Join-Path $repositoryRoot $relativePath
+        if (-not (Test-Path -LiteralPath $path -PathType Leaf)) {
+            throw "Trade-study source file not found: '$path'"
+        }
+
+        $insideBlockComment = $false
+        foreach ($line in Get-Content -LiteralPath $path) {
+            $trimmed = $line.Trim()
+            if ($insideBlockComment) {
+                if ($trimmed.Contains("*/")) { $insideBlockComment = $false }
+                continue
+            }
+            if ($trimmed.StartsWith("/*")) {
+                if (-not $trimmed.Contains("*/")) { $insideBlockComment = $true }
+                continue
+            }
+            if ($trimmed -and -not $trimmed.StartsWith("//")) { $count++ }
+        }
+    }
+    $count
+}
+
 function Measure-Elf([string]$Name) {
     $path = Join-Path $rustRoot "target\thumbv7em-none-eabihf\release\$Name"
     if (-not $llvmSize -or -not (Test-Path -LiteralPath $path)) {
@@ -44,6 +70,20 @@ function Measure-Elf([string]$Name) {
     [pscustomobject]@{
         FlashBytes = $sections.vector_table + $sections.text + $sections.rodata + $sections.data
         McuRamBytes = $sections.data + $sections.bss + $sections.uninit
+    }
+}
+
+function Measure-CElf {
+    $path = Join-Path $repositoryRoot "STM32CubeIDE\build\release\LwIP_UDP_Echo_Server.elf"
+    $sizeTool = Get-ChildItem "$env:APPDATA\xPacks\@xpack-dev-tools\arm-none-eabi-gcc" `
+        -Recurse -Filter arm-none-eabi-size.exe -ErrorAction SilentlyContinue |
+        Select-Object -First 1 -ExpandProperty FullName
+    if (-not $sizeTool -or -not (Test-Path -LiteralPath $path)) { return $null }
+
+    $columns = ((& $sizeTool $path | Select-Object -Last 1).Trim() -split "\s+")
+    [pscustomobject]@{
+        FlashBytes = [int64]$columns[0] + [int64]$columns[1]
+        McuRamBytes = [int64]$columns[1] + [int64]$columns[2]
     }
 }
 
@@ -93,7 +133,19 @@ $variants = @(
     }
 )
 
-$results = foreach ($variant in $variants) {
+$cElf = Measure-CElf
+$results = @([pscustomobject]@{
+    Variant = "C/LwIP native RMII"
+    BringUpNCLOC = Measure-CCodeLines @("Src/main.c", "Src/app_ethernet.c", "Src/ethernetif.c")
+    UdpServerNCLOC = Measure-CCodeLines @("Src/udp_echoserver.c")
+    StudyTotalNCLOC = 0
+    SignedBytes = $null
+    ElfFlashBytes = $cElf.FlashBytes
+    McuRamBytes = $cElf.McuRamBytes
+})
+$results[0].StudyTotalNCLOC = $results[0].BringUpNCLOC + $results[0].UdpServerNCLOC
+
+$results += foreach ($variant in $variants) {
     $bringUpLines = Measure-CodeLines $variant.BringUp
     $serverLines = Measure-CodeLines $variant.Server
     $artifact = if ($Profiling) {
@@ -127,6 +179,7 @@ Write-Host ""
 Write-Host "NCLOC excludes blank lines and full-line // comments; braces and declarations count."
 Write-Host "Shared files count in every variant that must maintain and compile them."
 Write-Host "Shared board.rs, tests, tools, bootloader, SSH, and update code are outside this scope."
+Write-Host "C bring-up includes main.c because its clock, MPU, loop, and netif integration are generated as one unit."
 Write-Host "ELF flash/RAM columns describe the latest release ELF; build all variants with matching features first."
 if (-not $llvmSize) {
     Write-Warning "llvm-size is unavailable. Install it with: rustup component add llvm-tools-preview"

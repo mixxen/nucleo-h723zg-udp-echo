@@ -2,6 +2,18 @@
 
 ## Executive summary
 
+This report records the original three-Rust-image run. The repeatable runner
+now also builds, flashes, and measures the C/LwIP native-RMII implementation;
+its results must not be inserted into this historical one-hour table until a
+full controlled rerun is completed.
+
+The firmware configurations are not identical. See the
+[configuration matrix](STREAM_BENCHMARK_REPORT.md#firmware-configuration-matrix)
+for clocks, RMII/SPI rates, receive servicing, maintenance timers, buffers,
+DHCP behavior, and optimization settings. In particular, C/LwIP runs at
+520 MHz with GCC `-O2`; the Rust images run at 400 MHz with size optimization
+and fat LTO.
+
 On 2026-08-13, all three Rust firmware variants sustained the representative
 100-byte, 1,000-datagram/s stream for one hour. None achieved literal zero
 loss over 3.6 million requests, but all loss rates were below 0.0006%. W5500
@@ -11,6 +23,7 @@ CPU, stack, and static MCU RAM.
 
 | Variant | Valid / sent | Missing | Loss | p50 RTT | p99 RTT | Max RTT | Executor CPU | Cycles / valid | Stack high-water | Static MCU RAM |
 |---|---:|---:|---:|---:|---:|---:|---:|---:|---:|---:|
+| C/LwIP native RMII | Pending one-hour run | — | — | — | — | — | N/A | N/A | N/A | 53,051 B release ELF |
 | Native RMII + Embassy | 3,599,981 / 3,600,000 | 19 | 0.000528% | 0.303 ms | 0.543 ms | 22.518 ms | 25.68% | 106,606 | 25,492 B | 20,560 B |
 | W5500 MACRAW + Embassy | 3,599,979 / 3,600,000 | 21 | 0.000583% | 0.674 ms | 1.500 ms | 29.184 ms | 54.06% | 224,403 | 31,404 B | 21,304 B |
 | W5500 hardware offload | 3,599,996 / 3,600,000 | 4 | 0.000111% | 0.448 ms | 0.565 ms | 29.559 ms | 34.20% | 141,980 | 920 B | 3,168 B |
@@ -50,6 +63,11 @@ DMA activity, and computation performed inside the W5500. Static MCU RAM is
 the profiling image's allocation before runtime stack use. The W5500's
 external 32 KiB packet RAM is not included.
 
+The C row is deliberately marked pending rather than mixing its 30-second
+stream with the Rust one-hour results. Its static RAM comes from the normal
+GCC `-O2` release ELF; equivalent C CPU and runtime stack instrumentation has
+not been implemented.
+
 ## Thirty-second rate sweep
 
 Each variant was also tested with 100-byte datagrams for 30 seconds at every
@@ -59,6 +77,7 @@ in order, uncorrupted, and before the 50 ms late threshold.
 
 | Variant | Continuous zero-error range | First failure | Practical saturation evidence |
 |---|---:|---:|---|
+| C/LwIP native RMII (3-second validation) | 1-15 kHz | 16 kHz: 1 missing | 18 kHz had 23 missing; 17, 19, and 20 kHz were zero-error |
 | Native RMII + Embassy | 1-3 kHz | 4 kHz: 1 missing | 6 kHz had 2 missing; 7 kHz had 13,326 error events |
 | W5500 MACRAW + Embassy | 1 kHz | 2 kHz: 57,630 events | At 2 kHz, 1,648 missing and 55,982 late |
 | W5500 hardware offload | 1-3 kHz | 4 kHz: 21,364 missing | Loss increased at every rate from 4 kHz upward |
@@ -133,6 +152,20 @@ one-hour streams, sweeps, and drains.
 
 The board was left running the W5500 hardware-offload profiling image at
 `192.168.68.74`.
+
+## C/LwIP integration validation
+
+The C/LwIP native-RMII image was added to the runner on 2026-08-13 and given
+the distinct MAC `02:00:00:00:00:C0`. A 30-second, 100-byte, 1 kHz validation
+at `192.168.68.119` returned all 30,000 datagrams with no errors. Median RTT
+was 0.118 ms, p99 was 0.352 ms, and maximum RTT was 9.436 ms.
+
+A three-second-per-rate engineering sweep was zero-error through 15 kHz,
+showed one missing packet at 16 kHz and 23 at 18 kHz, and returned zero errors
+at 17, 19, and 20 kHz. This short, non-monotonic sweep proves runner
+compatibility but is not comparable to the documented 30-second rate
+points or one-hour Rust streams. Use the four-image command in `README.md` or
+`BENCHMARK_PLAN.md` to produce a controlled replacement report.
 
 ## Conclusions
 

@@ -9,7 +9,8 @@ param(
     [switch]$W5500,
     [switch]$W5500Offload,
     [switch]$Benchmark,
-    [switch]$Profiling
+    [switch]$Profiling,
+    [switch]$Performance
 )
 
 $ErrorActionPreference = "Stop"
@@ -32,6 +33,12 @@ if ($Benchmark -and -not ($NativeUdp -or $W5500 -or $W5500Offload)) {
 if ($Profiling -and -not ($NativeUdp -or $W5500 -or $W5500Offload)) {
     throw "-Profiling requires -NativeUdp, -W5500, or -W5500Offload."
 }
+if ($Performance -and -not $NativeUdp) {
+    throw "-Performance currently requires -NativeUdp."
+}
+if ($Performance -and ($Profiling -or $Benchmark)) {
+    throw "-Performance already disables packet logging; do not combine it with -Benchmark or -Profiling."
+}
 
 $binaryName = if ($W5500Offload) {
     "nucleo-h723zg-w5500-offload-udp-echo"
@@ -45,10 +52,13 @@ $binaryName = if ($W5500Offload) {
 $artifactPrefix = if ($W5500Offload) { "firmware-w5500-offload" } elseif ($W5500) { "firmware-w5500" } elseif ($NativeUdp) { "firmware-native-udp" } else { "firmware" }
 if ($Profiling) {
     $artifactPrefix += "-profiling"
+} elseif ($Performance) {
+    $artifactPrefix += "-performance"
 } elseif ($Benchmark) {
     $artifactPrefix += "-benchmark"
 }
-$elf = Join-Path $projectRoot "target\thumbv7em-none-eabihf\release\$binaryName"
+$cargoProfile = if ($Performance) { "performance" } else { "release" }
+$elf = Join-Path $projectRoot "target\thumbv7em-none-eabihf\$cargoProfile\$binaryName"
 $unsignedBinary = Join-Path $artifacts "$artifactPrefix-unsigned.bin"
 $signedBinary = Join-Path $artifacts "$artifactPrefix-signed.bin"
 
@@ -62,11 +72,13 @@ New-Item -ItemType Directory -Path $artifacts -Force | Out-Null
 
 Push-Location $projectRoot
 try {
-    $cargoArguments = @("build", "--locked", "--release")
+    $cargoArguments = @("build", "--locked", "--profile", $cargoProfile)
     if ($NativeUdp -or $W5500 -or $W5500Offload) {
         $feature = if ($W5500Offload) { "wiznet-offload" } elseif ($W5500) { "wiznet" } else { "native-udp" }
         if ($Profiling) {
             $feature += ",profiling"
+        } elseif ($Performance) {
+            $feature += ",performance"
         } elseif ($Benchmark) {
             $feature += ",benchmark"
         }

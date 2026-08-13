@@ -59,6 +59,9 @@ jobs:
       - name: Lint benchmark-mode Embassy UDP server
         run: cargo clippy --locked --release --no-default-features --features native-udp,benchmark --bin nucleo-h723zg-native-rmii-udp-echo -- -D warnings
 
+      - name: Lint performance-mode Embassy UDP server
+        run: cargo clippy --locked --profile performance --no-default-features --features native-udp,performance --bin nucleo-h723zg-native-rmii-udp-echo -- -D warnings
+
       - name: Lint profiled native RMII firmware
         run: cargo clippy --locked --release --no-default-features --features native-udp,profiling --bin nucleo-h723zg-native-rmii-udp-echo -- -D warnings
 

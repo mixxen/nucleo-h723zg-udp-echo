@@ -501,6 +501,8 @@ by an unknown key. Detailed evidence remains in
 - `../.github/workflows/rust.yml`: host tests and embedded build checks on GitHub
 - `memory.x`: MCUboot primary-slot and AXI SRAM linker layout
 - `tools/flash.ps1`: MCUboot plus signed-app factory/recovery flash flow
+- `tools/build-c.ps1`: optimized standalone C/LwIP native-RMII build
+- `tools/flash-c.ps1`: direct ST-LINK flash of the C/LwIP release ELF
 - `tools/build-signed.ps1`: signed, versioned MCUboot image packaging
 - `tools/ethernet-flash.ps1`: authenticated Windows Ethernet-update client
 - `tools/provision_ssh.ps1`: persistent host and authorized-client key setup
@@ -508,8 +510,8 @@ by an unknown key. Detailed evidence remains in
 - `tools/measure-variants.ps1`: repeatable bring-up/server NCLOC and image sizes
 - `src/profiling.rs`: benchmark-only executor CPU and stack high-water telemetry
 
-See [TRADE_STUDY.md](TRADE_STUDY.md) for the controlled comparison among
-native RMII, W5500 MACRAW, and W5500 hardware-offload UDP firmware.
+See [TRADE_STUDY.md](TRADE_STUDY.md) for the controlled comparison among the
+native RMII and W5500 UDP firmware architectures.
 The repeatable latency, bandwidth, and reliability methodology is specified
 in [BENCHMARK_PLAN.md](BENCHMARK_PLAN.md).
 The completed native-RMII, W5500-MACRAW, and W5500-offload comparison is in
@@ -537,6 +539,7 @@ current DHCP leases and run:
 
 ```powershell
 .\Rust\tools\run-stream-benchmark-comparison.ps1 `
+    -CNativeIp 192.168.68.119 `
     -NativeIp 192.168.68.117 `
     -W5500Ip 192.168.68.74 `
     -Quick
@@ -544,7 +547,11 @@ current DHCP leases and run:
 
 Remove `-Quick` for the normal one-hour run. The tool sends exactly 100-byte
 datagrams at 1,000 Hz and records every missing, late, duplicate, reordered,
-or corrupt reply plus RTT percentiles. W5500 packet reception is now driven by
+or corrupt reply plus RTT percentiles. It flashes and measures four images:
+C/LwIP native RMII, Rust/Embassy native RMII, W5500 MACRAW, and W5500 hardware
+offload. `-CNativeIp` may be omitted when the C and Rust native images receive
+the same DHCP address. The C build expects a sibling `STM32CubeH7` checkout;
+use `-CubeRoot <path>` if it is elsewhere. W5500 packet reception is now driven by
 its active-low INTn signal through shield D2 to NUCLEO PG14/EXTI14. A one-second
 timer remains only for DHCP/link maintenance and missed-interrupt recovery;
 it is not the normal packet path.
@@ -567,11 +574,28 @@ The tool records achieved rate separately so host pacing limits are not
 misreported as board packet loss. `-Quick` keeps development feedback short:
 30 seconds for the 1 kHz stream and 3 seconds at each sweep rate.
 
+### Native-RMII performance build
+
+The normal Rust release remains optimized for MCUboot image size. For a fairer
+throughput comparison with the C/LwIP `-O2` image, build and flash the separate
+speed-oriented native image:
+
+```powershell
+.\Rust\tools\build-signed.ps1 -Version 0.4.3 -NativeUdp -Performance
+.\Rust\tools\flash.ps1 -SkipBuild -NativeUdp -Performance
+```
+
+This selects Cargo `opt-level=3`, disables successful-packet logging, runs the
+STM32H723 at 520 MHz with a 260 MHz AHB, and retains Embassy's interrupt-driven
+Ethernet architecture. It does not change the managed application or either
+W5500 build. See the optimization results in
+[STREAM_BENCHMARK_REPORT.md](STREAM_BENCHMARK_REPORT.md#rustembassy-native-optimization).
+
 The CPU figure is the percentage of wall-clock CPU cycles spent polling
-Embassy executor tasks. It deliberately excludes interrupt-handler time, DMA,
+Embassy executor tasks. It is unavailable for the C/LwIP image and deliberately excludes interrupt-handler time, DMA,
 and work performed inside the W5500, so read it as *executor utilization*, not
 total MCU utilization. The trace callbacks add overhead, which is why normal
 and `benchmark` firmware remain unchanged and performance comparisons use the
-same `profiling` feature on all three variants. Stack high-water is measured by
+same `profiling` feature on all three Rust variants. Stack high-water is measured by
 painting unused stack at reset and scanning it after the trial; static RAM is
 derived from the same profiling firmware's linker boundaries.

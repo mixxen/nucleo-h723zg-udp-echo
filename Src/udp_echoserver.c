@@ -20,9 +20,6 @@
 #include "main.h"
 #include "lwip/pbuf.h"
 #include "lwip/udp.h"
-#include "lwip/tcp.h"
-#include <string.h>
-#include <stdio.h>
 #include "udp_echoserver.h"
 
 /* Private typedef -----------------------------------------------------------*/
@@ -76,29 +73,11 @@ void udp_echoserver_init(void)
   */
 void udp_echoserver_receive_callback(void *arg, struct udp_pcb *upcb, struct pbuf *p, const ip_addr_t *addr, u16_t port)
 {
-  struct pbuf *p_tx;
-  
-  /* allocate pbuf from RAM*/
-  p_tx = pbuf_alloc(PBUF_TRANSPORT,p->len, PBUF_RAM);
-  
-  if(p_tx != NULL)
-  {
-    pbuf_take(p_tx, (char*)p->payload, p->len);
-    /* Connect to the remote client */
-    udp_connect(upcb, addr, UDP_CLIENT_PORT);
-    
-    /* Tell the client that we have accepted it */
-    udp_send(upcb, p_tx);
-    
-    /* free the UDP connection, so we can accept new clients */
-    udp_disconnect(upcb);
-    
-    /* Free the p_tx buffer */
-    pbuf_free(p_tx);
-
-    /* Free the p buffer */
-    pbuf_free(p);
-  }
+  (void)arg;
+  /* Echo the received pbuf to the sender's source port. udp_sendto() consumes
+     the data synchronously but not the pbuf, so release it afterward. */
+  udp_sendto(upcb, p, addr, port);
+  pbuf_free(p);
 }
 
 

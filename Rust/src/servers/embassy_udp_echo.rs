@@ -10,6 +10,7 @@ use nucleo_h723zg_udp_echo::{MAX_DATAGRAM_SIZE, UDP_ECHO_PORT, echo_payload};
 
 // Metadata entries form small fixed-size receive/transmit packet queues.
 const PACKET_SLOTS: usize = 4;
+const SOCKET_BUFFER_SIZE: usize = MAX_DATAGRAM_SIZE * PACKET_SLOTS;
 
 #[embassy_executor::task]
 pub async fn run(stack: Stack<'static>) -> ! {
@@ -19,8 +20,12 @@ pub async fn run(stack: Stack<'static>) -> ! {
     // remain alive as long as the socket borrows them.
     let mut rx_metadata = [PacketMetadata::EMPTY; PACKET_SLOTS];
     let mut tx_metadata = [PacketMetadata::EMPTY; PACKET_SLOTS];
-    let mut rx_buffer = [0u8; MAX_DATAGRAM_SIZE];
-    let mut tx_buffer = [0u8; MAX_DATAGRAM_SIZE];
+    // Metadata alone does not reserve payload bytes. Give all four queue slots
+    // enough backing storage for a maximum-size datagram so short bursts can
+    // wait in the socket instead of being dropped while this task echoes the
+    // preceding packet.
+    let mut rx_buffer = [0u8; SOCKET_BUFFER_SIZE];
+    let mut tx_buffer = [0u8; SOCKET_BUFFER_SIZE];
     // `payload` is separate working memory into which one received datagram is
     // copied before it is sent back.
     let mut payload = [0u8; MAX_DATAGRAM_SIZE];
