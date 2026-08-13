@@ -321,16 +321,16 @@ load was incomplete; it does not by itself indicate a board-side failure.
 | 18 | 23 | 43,800 | 2 | 32,895 | 7,736 | 53,904 | 22,094 |
 | 19 | 0 | 47,876 | 2 | 35,894 | 10,731 | 56,904 | 25,100 |
 | 20 | 0 | 52,088 | 0 | 38,898 | 13,739 | 59,904 | 28,081 |
-| 21 | — | 60,344 | 4 | 46,848 | 16,713 | 62,920 | 31,122 |
-| 22 | — | 63,868 | 21 | 48,791 | 19,724 | 65,924 | 34,107 |
-| 23 | — | 67,412 | 27 | 51,791 | 22,724 | 68,924 | 37,068 |
-| 24 | — | 70,920 | 80 | 54,802 | 25,728 | 71,924 | 40,090 |
-| 25 | — | 74,452 | 68 | 57,877 | 28,729 | 74,924 | 43,096 |
-| 26 | — | 78,000 | 2 | 60,875 | 31,728 | 77,924 | 46,067 |
-| 27 | — | 81,000 | 105 | 63,876 | 34,719 | 80,924 | 49,054 |
-| 28 | — | 84,000 | 3 | 66,868 | 37,730 | 83,924 | 52,052 |
-| 29 | — | 87,000 | 202 | 69,873 | 40,727 | 86,924 | 55,047 |
-| 30 | — | 90,000 | 287 | 72,872 | 43,722 | 89,924 | 58,039 |
+| 21 | 0 | 60,344 | 4 | 46,848 | 16,713 | 62,920 | 31,122 |
+| 22 | 0 | 63,868 | 21 | 48,791 | 19,724 | 65,924 | 34,107 |
+| 23 | 0 | 67,412 | 27 | 51,791 | 22,724 | 68,924 | 37,068 |
+| 24 | 186 | 70,920 | 80 | 54,802 | 25,728 | 71,924 | 40,090 |
+| 25 | 0 | 74,452 | 68 | 57,877 | 28,729 | 74,924 | 43,096 |
+| 26 | 0 | 78,000 | 2 | 60,875 | 31,728 | 77,924 | 46,067 |
+| 27 | 0 | 81,000 | 105 | 63,876 | 34,719 | 80,924 | 49,054 |
+| 28 | 0 | 84,000 | 3 | 66,868 | 37,730 | 83,924 | 52,052 |
+| 29 | 0 | 87,000 | 202 | 69,873 | 40,727 | 86,924 | 55,047 |
+| 30 | 0 | 90,000 | 287 | 72,872 | 43,722 | 89,924 | 58,039 |
 
 An error event is one missing, late, duplicate, reordered, corrupt, foreign,
 or send-error observation. A packet can contribute more than one event; for
@@ -340,11 +340,15 @@ The optimized Rust run has zero error events at 12 kHz because every packet
 actually sent was returned correctly, but it is still marked unreliable in
 the preceding table: the Windows host sent 35,999 of 36,000 planned packets
 and therefore did not achieve the exact requested offered load.
-The C/LwIP image did not answer after it was reflashed for the 21-30 kHz
-continuation, so those cells are left unmeasured instead of treating the testbed
-problem as packet loss. The W5500 offload continuation used the current code
-rebuilt with the control's 20 MHz SPI request; it is useful context but is not a
-bit-for-bit rerun of the earlier control firmware.
+The C/LwIP continuation initially appeared offline because its distinct
+`02-00-00-00-00-c0` MAC received `192.168.68.74`, rather than the native Rust
+image's former `.117` lease. A subnet-wide UDP discovery found it and the retry
+completed through 30 kHz. Its 186 missing packets at 24 kHz were isolated: the
+25-30 kHz points all completed with zero errors. Three immediate 24 kHz repeats
+then recorded 0, 0, and 15 errors, respectively, confirming intermittent loss
+rather than a monotonic throughput knee. The W5500 offload continuation used the
+current code rebuilt with the control's 20 MHz SPI request; it is useful context
+but is not a bit-for-bit rerun of the earlier control firmware.
 The optimized W5500 column is the retained dedicated-40-MHz SPI plus D-cache
 run. Its 1-15 kHz points were all zero-error, and a separate 30-second 15 kHz
 dwell also returned all 450,000 packets.
