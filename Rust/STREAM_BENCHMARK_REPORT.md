@@ -182,7 +182,9 @@ bottleneck.
 
 The connected board passed 100 randomized binary echoes spanning 1, 100, and
 1,472 bytes, and live `CCR=0x00070210` confirmed both caches. The performance
-signed image is 83,696 bytes and uses 30,240 bytes of static MCU RAM.
+signed image is 83,696 bytes and uses 30,240 bytes of static MCU RAM. A matched
+30-second 1 kHz run returned all 30,000 packets with 0.230/0.805 ms p50/p99
+RTT.
 
 ## W5500 hardware-offload optimization
 
@@ -214,7 +216,7 @@ Five changes were retained:
 | Performance clock/compiler | 520 MHz, speed (`3`) | approximately 32.5 MHz | 1-11 kHz | 11,561 valid/s | 0.234 / 0.403 ms |
 | Performance + cached peer | 520 MHz, speed (`3`) | approximately 32.5 MHz | 1-12 kHz on repeat sweep | 12,117 valid/s | 0.231 / 0.435 ms |
 | Dedicated SPI clock | 520 MHz, speed (`3`) | 40 MHz | 1-14 kHz | about 14,242 valid/s | not rerun at 1 kHz |
-| **Retained W5500 D-cache** | **520 MHz, speed (`3`) + I/D-cache** | **40 MHz** | **1-15 kHz** | **about 15,421 valid/s** | **not rerun at 1 kHz** |
+| **Retained W5500 D-cache** | **520 MHz, speed (`3`) + I/D-cache** | **40 MHz** | **1-15 kHz** | **about 15,421 valid/s** | **0.193 / 0.402 ms** |
 
 The final plateau is about 119% above the fresh control. The preceding
 cached-peer stage's first full sweep had four missing packets at 5 kHz but
@@ -225,8 +227,8 @@ packets (0.036% loss). The retained 40 MHz build subsequently returned all
 420,000/420,000 packets during a 30-second 14 kHz boundary dwell, making
 14 kHz the measured sustained point for that stage. Enabling D-cache then
 returned all 450,000/450,000 packets during a 30-second 15 kHz dwell, making
-15 kHz the new measured sustained point. All earlier 1 kHz trials returned
-30,000/30,000.
+15 kHz the new measured sustained point. A matched 30-second 1 kHz run returned
+29,999/30,000 packets with one missing reply and 0.193/0.402 ms p50/p99 RTT.
 
 The live Cortex-M7 cache-control register was `CCR=0x00070210`, confirming
 that both I-cache and D-cache were enabled in the retained image. The cache
@@ -266,19 +268,18 @@ performance images are not configuration-identical to their controls:
 | Native RMII + Embassy control | 400 MHz, size (`z`) | 30 s | 30,000 / 30,000 | 0 | 0 | 0 | 0 | 0 | 0.278 ms | 0.369 ms | 16.173 ms |
 | **Native RMII retained performance** | **520 MHz, speed (`3`), full checksum offload** | **30 s** | **30,000 / 30,000** | **0** | **0** | **0** | **0** | **0** | **0.146 ms** | **0.220 ms** | **1.831 ms** |
 | W5500 MACRAW control | 400 MHz, 20 MHz SPI, size (`z`) | 30 s | 30,000 / 30,000 | 0 | 0 | 0 | 0 | 0 | 0.687 ms | 1.761 ms | 31.528 ms |
-| **W5500 MACRAW retained performance** | **520 MHz, 40 MHz SPI, speed (`3`), I/D-cache** | **3 s** | **3,000 / 3,000** | **0** | **0** | **0** | **0** | **0** | **0.230 ms** | **0.527 ms** | **2.192 ms** |
+| **W5500 MACRAW retained performance** | **520 MHz, 40 MHz SPI, speed (`3`), I/D-cache** | **30 s** | **30,000 / 30,000** | **0** | **0** | **0** | **0** | **0** | **0.230 ms** | **0.805 ms** | **14.316 ms** |
 | W5500 offload fresh control | 400 MHz, 20 MHz SPI, size (`z`) | 30 s | 30,000 / 30,000 | 0 | 0 | 0 | 0 | 0 | 0.296 ms | 0.403 ms | 3.439 ms |
-| **W5500 offload retained performance** | **520 MHz, 40 MHz SPI, speed (`3`), I/D-cache** | **3 s** | **3,000 / 3,000** | **0** | **0** | **0** | **0** | **0** | **0.194 ms** | **0.340 ms** | **1.834 ms** |
+| **W5500 offload retained performance** | **520 MHz, 40 MHz SPI, speed (`3`), I/D-cache** | **30 s** | **29,999 / 30,000** | **1** | **0** | **0** | **0** | **0** | **0.193 ms** | **0.402 ms** | **14.169 ms** |
 
-Every row met the short-run 1 kHz reliability gate and achieved exactly the
-requested offered rate. The retained native image has a matched 30-second
-sample; the retained W5500 values come from the 1 kHz points of their latest
-3-second sweeps. Their latency maxima therefore must not be compared directly
-with the 30-second maxima. The latest samples show substantial latency gains
-for both W5500 paths, with hardware offload remaining faster than MACRAW.
-These are complete-stack implementation comparisons, not evidence that
-language alone caused a latency difference. Use matched repeatable one-hour
-and 8-hour runs before treating tail values as qualification data.
+All rows now use matched 30-second samples and achieved exactly the requested
+offered rate. Every row except retained W5500 offload met the strict zero-error
+gate; that image had one missing reply out of 30,000. The optimized samples
+show substantial latency gains for both W5500 paths, with hardware offload
+remaining faster than MACRAW. These are complete-stack implementation
+comparisons, not evidence that language alone caused a latency difference.
+Use matched repeatable one-hour and 8-hour runs before treating loss or tail
+values as qualification data.
 
 ## Preliminary reliability knee
 

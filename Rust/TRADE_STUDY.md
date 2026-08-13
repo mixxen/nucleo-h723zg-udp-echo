@@ -141,7 +141,9 @@ MCU/AHB clocks, a dedicated 40 MHz SPI clock, D-cache, and disabled packet
 logging. Its short zero-error range increased from 1 kHz to 1-9 kHz, and its
 saturation plateau increased from approximately 1,900 to 10,634 valid
 packets/s. A 30-second 8 kHz run returned all 240,000 packets with 0.505 ms
-p99 RTT; the 9 kHz boundary missed 7 of 270,000.
+p99 RTT; the 9 kHz boundary missed 7 of 270,000. At the 1 kHz requirement, a
+matched 30-second run returned all 30,000 packets with 0.230/0.805 ms p50/p99
+RTT.
 
 The performance signed image is 83,696 bytes with 30,240 bytes of static MCU
 RAM. An attempted increase from four to eight driver frames per direction was
@@ -156,8 +158,8 @@ The W5500 hardwired-socket path now has its own performance build. It combines
 path, W5500-only D-cache, and a cached UDP destination register. Its short
 sweep was zero-error from 1 through 15 kHz, compared with 1 through 7 kHz for
 the fresh control, and its saturation plateau increased from about 7,034 to
-15,421 valid packets/s. The earlier 1 kHz trial returned 30,000/30,000 with
-0.231/0.435 ms p50/p99 RTT.
+15,421 valid packets/s. The matched 30-second 1 kHz trial returned
+29,999/30,000 with one missing reply and 0.193/0.402 ms p50/p99 RTT.
 
 The cached peer increases the offload UDP-server metric by seven NCLOC and
 static RAM by 56 bytes; making SPI frequency explicit adds one shared bring-up
