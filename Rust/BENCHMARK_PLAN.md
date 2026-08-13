@@ -124,6 +124,62 @@ tuned, record it as a separate configuration and rerun the baseline.
 
 ## Test phases
 
+### Fixed-rate stream workload
+
+The fast-steering-mirror acceptance workload is a fixed stream of exactly
+100-byte UDP datagrams at exactly 1,000 datagrams/s (0.800 Mbit/s of one-way
+UDP payload). Each packet carries the normal run ID, sequence, timestamp, and
+deterministic data pattern, so the test detects loss, late delivery,
+duplication, reordering, and corruption while measuring RTT percentiles.
+
+Run one target directly:
+
+```powershell
+.\Rust\tools\udp-benchmark\target\x86_64-pc-windows-msvc\release\udp-benchmark.exe stream `
+    --board 192.168.68.74 `
+    --duration-seconds 900 `
+    --interval-seconds 60 `
+    --output-dir .\Rust\benchmark-results\stream
+```
+
+Or build, flash, and compare all three variants repeatably:
+
+```powershell
+.\Rust\tools\run-stream-benchmark-comparison.ps1 `
+    -NativeIp 192.168.68.117 `
+    -W5500Ip 192.168.68.74
+```
+
+Use `-Quick` for a 30-second engineering check. The normal 15-minute run is
+the baseline; an 8-hour run is the release soak. DHCP addresses are examples,
+so verify the router leases before running the automated sequence.
+
+This is a transport surrogate, not a complete mirror-control acceptance
+test: the current board application echoes each command instead of decoding
+it and driving an actuator. It faithfully exercises the packet size,
+frequency, receive path, scheduling pressure, and reply telemetry, but a
+future hardware-in-the-loop test must add command-age deadlines and physical
+mirror response.
+
+To find the reliability knee, `stream-sweep` runs 100-byte packets from 1 through
+20 kHz in 1 kHz increments. The default dwell is 10 seconds per rate:
+
+```powershell
+.\Rust\tools\udp-benchmark\target\x86_64-pc-windows-msvc\release\udp-benchmark.exe stream-sweep `
+    --board 192.168.68.74 `
+    --duration-seconds 10 `
+    --output-dir .\Rust\benchmark-results\stream-sweep
+```
+
+The summary reports `1 kHz -> highest reliable kHz`, the first unreliable
+rate, and an error-event total at every increment. A rate is reliable only if
+the host achieves at least 98% of the target and every planned packet is sent
+and returned exactly once, in order, within the configured 50 ms timeout, and
+without corruption. Error events sum the missing, late, duplicate, reordered,
+corrupt, foreign, and send-error counters. Because those conditions can
+overlap for one packet, the detailed counters remain the authoritative
+breakdown. Requested and achieved rates are both retained.
+
 ### 1. Functional gate
 
 Before recording performance, use the existing acceptance client with
@@ -312,6 +368,12 @@ Implemented on 2026-08-12:
 - automated three-image Windows runner in
   `tools/run-benchmark-comparison.ps1`; and
 - one controlled full baseline covering all three variants.
+- an exact 100-byte/1,000 Hz stream workload and repeatable three-image runner;
+- a 1 kHz-step command-rate sweep from 1 through 20 kHz that records the
+  highest reliable and first unreliable rates;
+- interrupt-driven W5500 receive on Arduino D2 / PG14 / EXTI14, replacing the
+  former 1 ms packet polling; and
+- ELF flash and MCU RAM measurement in `tools/measure-variants.ps1`.
 
 The reviewed results and conclusions are in
 [BENCHMARK_REPORT.md](BENCHMARK_REPORT.md). The baseline used every initial

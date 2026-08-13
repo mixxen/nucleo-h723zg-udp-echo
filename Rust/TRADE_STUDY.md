@@ -44,19 +44,34 @@ Ethernet comparison. Tests, scripts, MCUboot, SSH, and firmware update are
 also excluded. External crates are not added to first-party SLOC; binary size
 and dependency inventory capture their effect separately.
 
-Current release-build results (2026-08-12):
+Current benchmark release-build results after the interrupt refactor
+(2026-08-12):
 
-| Variant | Bring-up NCLOC | UDP server NCLOC | Study total | Signed bytes |
-|---|---:|---:|---:|---:|
-| Native RMII + Embassy | 136 | 43 | 179 | 60,032 |
-| W5500 MACRAW + Embassy | 272 | 43 | 315 | 65,680 |
-| W5500 hardware offload | 213 | 39 | 252 | 24,288 |
+| Variant | Bring-up NCLOC | UDP server NCLOC | Study total | Signed bytes | MCU RAM bytes |
+|---|---:|---:|---:|---:|---:|
+| Native RMII + Embassy | 136 | 47 | 183 | 59,848 | 20,248 |
+| W5500 MACRAW + Embassy | 255 | 47 | 302 | 66,592 | 20,992 |
+| W5500 hardware offload | 236 | 53 | 289 | 25,728 | 3,124 |
 
 The signed size is not proportional to first-party NCLOC because it also
 contains the selected Rust crates and their compiled protocol machinery. In
 particular, the offload build delegates the network stack to the W5500 and
 therefore has the smallest image despite having more bring-up source than the
 native-RMII variant.
+
+The RAM column is `.data + .bss + .uninit` from the release ELF. It includes
+statically allocated Embassy tasks and buffers but not call-stack high-water
+usage. The W5500's own 32 KiB packet memory is external to MCU RAM and is not
+included. Recreate these columns after matching release builds with:
+
+```powershell
+.\Rust\tools\measure-variants.ps1 -Benchmark
+```
+
+The previous MACRAW timer shim was removed, saving first-party bring-up code.
+Offload gained explicit socket-interrupt setup and safe flag clearing, so its
+source grew; that is real device-management complexity and belongs in the
+bring-up comparison rather than being hidden in the UDP echo loop.
 
 ## Source boundaries
 

@@ -11,7 +11,7 @@ use nucleo_h723zg_udp_echo::{UDP_ECHO_PORT, W5500_MAC_ADDRESS};
 use w5500_dhcp::hl::{Common, Udp};
 use w5500_dhcp::ll::eh1::vdm::W5500;
 use w5500_dhcp::ll::net::Eui48Addr;
-use w5500_dhcp::ll::{Mode, Registers, Sn};
+use w5500_dhcp::ll::{Mode, Registers, Sn, SocketInterruptMask};
 use w5500_dhcp::{Client, Hostname};
 
 use crate::w5500_spi;
@@ -74,15 +74,24 @@ impl Network {
         })
     }
 
-    /// Advance DHCP and make socket 1 available exactly while a lease exists.
-    pub fn poll(&mut self) -> bool {
-        let seconds = Instant::now().as_secs() as u32;
-        if let Err(cause) = self.dhcp.process(&mut self.device, seconds) {
-            warn!("DHCP processing failed: {:?}", cause);
+    /// Service DHCP only when its socket interrupted or its timer is due.
+    pub fn poll(&mut self, maintenance_due: bool) -> bool {
+        let socket_interrupts = unwrap!(self.device.sir());
+        if maintenance_due || socket_interrupts & DHCP_SOCKET.bitmask() != 0 {
+            let seconds = Instant::now().as_secs() as u32;
+            if let Err(cause) = self.dhcp.process(&mut self.device, seconds) {
+                warn!("DHCP processing failed: {:?}", cause);
+            }
         }
 
         if self.dhcp.has_lease() && !self.echo_is_bound {
             unwrap!(self.device.udp_bind(ECHO_SOCKET, UDP_ECHO_PORT));
+            let sockets = unwrap!(self.device.simr());
+            unwrap!(self.device.set_simr(sockets | ECHO_SOCKET.bitmask()));
+            unwrap!(
+                self.device
+                    .set_sn_imr(ECHO_SOCKET, SocketInterruptMask::ALL_MASKED.unmask_recv())
+            );
             self.echo_is_bound = true;
             self.ready_led.set_high();
             self.error_led.set_low();
@@ -92,6 +101,8 @@ impl Network {
                 UDP_ECHO_PORT
             );
         } else if !self.dhcp.has_lease() && self.echo_is_bound {
+            let sockets = unwrap!(self.device.simr());
+            unwrap!(self.device.set_simr(sockets & !ECHO_SOCKET.bitmask()));
             unwrap!(self.device.close(ECHO_SOCKET));
             self.echo_is_bound = false;
             self.ready_led.set_low();

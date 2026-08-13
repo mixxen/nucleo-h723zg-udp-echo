@@ -104,6 +104,25 @@ pub struct SoakResult {
 }
 
 #[derive(Clone, Debug, Serialize, Deserialize)]
+pub struct StreamSweepPoint {
+    pub target_hz: f64,
+    pub achieved_hz: f64,
+    pub reliable: bool,
+    /// Sum of all observed error events; see the individual counters for detail.
+    pub error_events: u64,
+    pub result: SoakResult,
+}
+
+#[derive(Clone, Debug, Serialize, Deserialize)]
+pub struct StreamSweepResult {
+    pub payload_bytes: usize,
+    pub duration_seconds_per_rate: u64,
+    pub highest_reliable_hz: Option<f64>,
+    pub first_unreliable_hz: Option<f64>,
+    pub points: Vec<StreamSweepPoint>,
+}
+
+#[derive(Clone, Debug, Serialize, Deserialize)]
 pub struct SuiteResult {
     pub metadata: Metadata,
     pub functional: Vec<FunctionalResult>,

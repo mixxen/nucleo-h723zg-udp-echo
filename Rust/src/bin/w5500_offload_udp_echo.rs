@@ -14,9 +14,17 @@ mod w5500_spi;
 
 use defmt::{error, info};
 use embassy_executor::Spawner;
-use embassy_stm32::gpio::{Level, Output, Speed};
+use embassy_futures::select::{Either, select};
+use embassy_stm32::bind_interrupts;
+use embassy_stm32::exti::{ExtiInput, InterruptHandler};
+use embassy_stm32::gpio::{Level, Output, Pull, Speed};
+use embassy_stm32::interrupt::typelevel::EXTI15_10;
 use embassy_time::Timer;
 use {defmt_rtt as _, panic_probe as _};
+
+bind_interrupts!(struct Irqs {
+    EXTI15_10 => InterruptHandler<EXTI15_10>;
+});
 
 #[embassy_executor::main]
 async fn main(_spawner: Spawner) -> ! {
@@ -26,6 +34,7 @@ async fn main(_spawner: Spawner) -> ! {
     let ready_led = Output::new(p.PE1, Level::Low, Speed::Low);
     let error_led = Output::new(p.PB14, Level::High, Speed::Low);
     let spi = w5500_spi::new(p.SPI1, p.PA5, p.PB5, p.PA6, p.PD14);
+    let mut interrupt = ExtiInput::new(p.PG14, p.EXTI14, Pull::Up, Irqs);
     let mut network = match w5500_offload::Network::new(spi, ready_led, error_led).await {
         Ok(network) => network,
         Err(w5500_offload::InitError::InvalidVersion(version)) => {
@@ -38,11 +47,19 @@ async fn main(_spawner: Spawner) -> ! {
         }
     };
     let mut server = udp_server::Server::new();
+    let mut maintenance_due = true;
 
     loop {
-        if network.poll() {
+        if network.poll(maintenance_due) {
             server.poll(network.device_mut());
         }
-        Timer::after_millis(1).await;
+
+        // Packets normally wake us immediately through W5500 INTn. The
+        // one-second maintenance wakeup advances DHCP and recovers safely if
+        // an interrupt is ever missed or the cable state changes.
+        maintenance_due = matches!(
+            select(interrupt.wait_for_low(), Timer::after_secs(1)).await,
+            Either::Second(_)
+        );
     }
 }

@@ -17,11 +17,18 @@ mod w5500_spi;
 use defmt::{error, info, unwrap};
 use embassy_executor::Spawner;
 use embassy_net::StackResources;
-use embassy_stm32::gpio::{Level, Output, Speed};
+use embassy_stm32::bind_interrupts;
+use embassy_stm32::exti::{ExtiInput, InterruptHandler};
+use embassy_stm32::gpio::{Level, Output, Pull, Speed};
+use embassy_stm32::interrupt::typelevel::EXTI15_10;
 use static_cell::StaticCell;
 use {defmt_rtt as _, panic_probe as _};
 
 static NETWORK_RESOURCES: StaticCell<StackResources<3>> = StaticCell::new();
+
+bind_interrupts!(struct Irqs {
+    EXTI15_10 => InterruptHandler<EXTI15_10>;
+});
 
 #[embassy_executor::task]
 async fn driver_task(runner: w5500_macraw::Runner) -> ! {
@@ -42,7 +49,10 @@ async fn main(spawner: Spawner) -> ! {
     let ready_led = Output::new(p.PE1, Level::Low, Speed::Low);
     let error_led = Output::new(p.PB14, Level::High, Speed::Low);
     let spi = w5500_spi::new(p.SPI1, p.PA5, p.PB5, p.PA6, p.PD14);
-    let (device, driver_runner) = match w5500_macraw::new(spi).await {
+    // W5500 INTn is active-low. The WIZnet shield routes it through Arduino
+    // D2, which is PG14/EXTI14 on the NUCLEO-H723ZG.
+    let interrupt = ExtiInput::new(p.PG14, p.EXTI14, Pull::Up, Irqs);
+    let (device, driver_runner) = match w5500_macraw::new(spi, interrupt).await {
         Ok(parts) => parts,
         Err(embassy_net_wiznet::InitError::InvalidChipVersion { actual, .. }) => {
             error!("W5500 returned unexpected chip version {}", actual);

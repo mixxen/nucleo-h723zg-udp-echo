@@ -14,7 +14,9 @@ use std::process::Command;
 use std::time::{Duration, SystemTime, UNIX_EPOCH};
 
 use clap::{Args, Parser, Subcommand};
-use model::{CapacityResult, Metadata, PacketCounters, SuiteResult};
+use model::{
+    CapacityResult, Metadata, PacketCounters, StreamSweepPoint, StreamSweepResult, SuiteResult,
+};
 use runner::BenchSocket;
 use serde::Serialize;
 
@@ -37,6 +39,10 @@ enum Commands {
     Burst(BurstArgs),
     /// Run mixed-size traffic for an extended reliability interval.
     Soak(SoakArgs),
+    /// Run a repeatable fixed-size, fixed-rate datagram stream.
+    Stream(StreamArgs),
+    /// Sweep the stream rate from 1 through 20 kHz.
+    StreamSweep(StreamSweepArgs),
     /// Run the functional, latency, throughput, burst, and soak phases.
     Suite(SuiteArgs),
     /// Combine suite JSON files into one Markdown trade-study report.
@@ -143,6 +149,59 @@ struct SoakArgs {
 }
 
 #[derive(Args)]
+struct StreamArgs {
+    #[command(flatten)]
+    target: TargetArgs,
+    /// Command datagram size, including the benchmark sequence header.
+    #[arg(long, default_value_t = 100)]
+    payload_bytes: usize,
+    /// Commands sent per second.
+    #[arg(long, default_value_t = 1_000.0)]
+    rate_hz: f64,
+    #[arg(long, default_value_t = 900)]
+    duration_seconds: u64,
+    #[arg(long, default_value_t = 60)]
+    interval_seconds: u64,
+    #[arg(long, default_value_t = 2_000)]
+    drain_ms: u64,
+    #[arg(long, default_value_t = 50)]
+    timeout_ms: u64,
+    #[arg(long, default_value_t = 256)]
+    window: usize,
+    #[arg(long, default_value = "benchmark-results/stream")]
+    output_dir: PathBuf,
+    #[arg(long, default_value_t = 0x4653_4d07_2300_0001)]
+    run_id: u64,
+}
+
+#[derive(Args)]
+struct StreamSweepArgs {
+    #[command(flatten)]
+    target: TargetArgs,
+    #[arg(long, default_value_t = 100)]
+    payload_bytes: usize,
+    /// Comma-separated command rates in Hz.
+    #[arg(
+        long,
+        default_value = "1000,2000,3000,4000,5000,6000,7000,8000,9000,10000,11000,12000,13000,14000,15000,16000,17000,18000,19000,20000"
+    )]
+    rates_hz: String,
+    #[arg(long, default_value_t = 10)]
+    duration_seconds: u64,
+    #[arg(long, default_value_t = 2_000)]
+    drain_ms: u64,
+    #[arg(long, default_value_t = 50)]
+    timeout_ms: u64,
+    /// Large enough that loss recovery does not throttle high-rate trials.
+    #[arg(long, default_value_t = 8_192)]
+    window: usize,
+    #[arg(long, default_value = "benchmark-results/stream-sweep")]
+    output_dir: PathBuf,
+    #[arg(long, default_value_t = 0x4653_4d07_2300_1000)]
+    run_id: u64,
+}
+
+#[derive(Args)]
 struct SuiteArgs {
     #[command(flatten)]
     target: TargetArgs,
@@ -191,6 +250,8 @@ fn main() -> Result<(), Box<dyn Error>> {
         Commands::Throughput(args) => run_throughput(args)?,
         Commands::Burst(args) => run_burst(args)?,
         Commands::Soak(args) => run_soak(args)?,
+        Commands::Stream(args) => run_stream(args)?,
+        Commands::StreamSweep(args) => run_stream_sweep(args)?,
         Commands::Suite(args) => run_suite(args)?,
         Commands::Compare(args) => run_compare(args)?,
     }
@@ -274,6 +335,116 @@ fn run_soak(args: SoakArgs) -> Result<(), Box<dyn Error>> {
     prepare_output(&args.output_dir)?;
     write_json(args.output_dir.join("soak.json"), &result)?;
     write_load_csv(args.output_dir.join("soak.csv"), &result.intervals)?;
+    Ok(())
+}
+
+fn run_stream(args: StreamArgs) -> Result<(), Box<dyn Error>> {
+    let socket = BenchSocket::connect(target_address(&args.target)?)?;
+    let result = socket.fixed_rate(
+        args.payload_bytes,
+        args.rate_hz,
+        Duration::from_secs(args.duration_seconds),
+        Duration::from_secs(args.interval_seconds),
+        Duration::from_millis(args.drain_ms),
+        Duration::from_millis(args.timeout_ms),
+        args.window,
+        args.run_id,
+    )?;
+    prepare_output(&args.output_dir)?;
+    write_json(args.output_dir.join("stream.json"), &result)?;
+    write_load_csv(args.output_dir.join("stream.csv"), &result.intervals)?;
+    fs::write(
+        args.output_dir.join("summary.md"),
+        stream_markdown(args.payload_bytes, args.rate_hz, &result),
+    )?;
+    println!(
+        "stream payload={} bytes target={:.3} Hz achieved={:.3} Hz valid={}/{} missing={} late={} p99={:.3} ms",
+        args.payload_bytes,
+        args.rate_hz,
+        result.counters.sent as f64 / args.duration_seconds as f64,
+        result.counters.valid_replies,
+        result.counters.sent,
+        result.counters.missing,
+        result.counters.late,
+        ns_ms(result.latency.p99_ns),
+    );
+    Ok(())
+}
+
+fn run_stream_sweep(args: StreamSweepArgs) -> Result<(), Box<dyn Error>> {
+    if args.duration_seconds == 0 {
+        return Err("duration must be greater than zero".into());
+    }
+    let rates = parse_float_list(&args.rates_hz)?;
+    let socket = BenchSocket::connect(target_address(&args.target)?)?;
+    let mut points = Vec::with_capacity(rates.len());
+
+    for (index, target_hz) in rates.into_iter().enumerate() {
+        let result = socket.fixed_rate(
+            args.payload_bytes,
+            target_hz,
+            Duration::from_secs(args.duration_seconds),
+            Duration::from_secs(args.duration_seconds),
+            Duration::from_millis(args.drain_ms),
+            Duration::from_millis(args.timeout_ms),
+            args.window,
+            args.run_id.wrapping_add(index as u64),
+        )?;
+        let achieved_hz = result.counters.sent as f64 / args.duration_seconds as f64;
+        let reliable = stream_reliable(&result, target_hz, achieved_hz);
+        let error_events = stream_error_events(&result.counters);
+        println!(
+            "stream sweep target={:.3} kHz achieved={:.3} kHz reliable={} errors={} valid={}/{} missing={} late={} duplicate={} reordered={} corrupt={} foreign={} send_errors={} p99={:.3} ms",
+            target_hz / 1_000.0,
+            achieved_hz / 1_000.0,
+            reliable,
+            error_events,
+            result.counters.valid_replies,
+            result.counters.sent,
+            result.counters.missing,
+            result.counters.late,
+            result.counters.duplicates,
+            result.counters.reordered,
+            result.counters.corrupt,
+            result.counters.foreign,
+            result.counters.send_errors,
+            ns_ms(result.latency.p99_ns),
+        );
+        points.push(StreamSweepPoint {
+            target_hz,
+            achieved_hz,
+            reliable,
+            error_events,
+            result,
+        });
+    }
+
+    let sweep = StreamSweepResult {
+        payload_bytes: args.payload_bytes,
+        duration_seconds_per_rate: args.duration_seconds,
+        highest_reliable_hz: points
+            .iter()
+            .take_while(|point| point.reliable)
+            .last()
+            .map(|point| point.target_hz),
+        first_unreliable_hz: points
+            .iter()
+            .find(|point| !point.reliable)
+            .map(|point| point.target_hz),
+        points,
+    };
+    prepare_output(&args.output_dir)?;
+    write_json(args.output_dir.join("stream-sweep.json"), &sweep)?;
+    write_stream_sweep_csv(args.output_dir.join("stream-sweep.csv"), &sweep)?;
+    fs::write(
+        args.output_dir.join("summary.md"),
+        stream_sweep_markdown(&sweep),
+    )?;
+    println!(
+        "stream reliable range: 1 kHz -> {}; first unreliable: {}",
+        format_rate(sweep.highest_reliable_hz),
+        format_rate(sweep.first_unreliable_hz),
+    );
     Ok(())
 }
 
@@ -566,6 +737,39 @@ fn write_load_csv(path: PathBuf, results: &[model::LoadResult]) -> io_result::Re
     Ok(())
 }
 
+fn write_stream_sweep_csv(path: PathBuf, sweep: &StreamSweepResult) -> io_result::Result<()> {
+    let mut output = BufWriter::new(File::create(path)?);
+    writeln!(
+        output,
+        "target_hz,achieved_hz,reliable,error_events,sent,valid,missing,late,duplicates,reordered,corrupt,foreign,send_errors,p50_ns,p99_ns,max_ns"
+    )?;
+    for point in &sweep.points {
+        let counters = &point.result.counters;
+        let latency = &point.result.latency;
+        writeln!(
+            output,
+            "{:.3},{:.3},{},{},{},{},{},{},{},{},{},{},{},{},{},{}",
+            point.target_hz,
+            point.achieved_hz,
+            point.reliable,
+            point.error_events,
+            counters.sent,
+            counters.valid_replies,
+            counters.missing,
+            counters.late,
+            counters.duplicates,
+            counters.reordered,
+            counters.corrupt,
+            counters.foreign,
+            counters.send_errors,
+            latency.p50_ns,
+            latency.p99_ns,
+            latency.max_ns,
+        )?;
+    }
+    Ok(())
+}
+
 fn suite_markdown(suite: &SuiteResult) -> String {
     let mut output = String::new();
     output.push_str(&format!(
@@ -731,6 +935,89 @@ fn counters_markdown(counters: &PacketCounters) -> String {
     )
 }
 
+fn stream_markdown(payload_bytes: usize, rate_hz: f64, result: &model::SoakResult) -> String {
+    format!(
+        "# Stream benchmark\n\n- Payload: {payload_bytes} bytes\n- Target: {rate_hz:.3} datagrams/s ({:.3} Mbit/s one way)\n- Duration: {} seconds\n- Sent: {}\n- Valid replies: {}\n- Missing: {}\n- Late: {}\n- Duplicate: {}\n- Reordered: {}\n- Corrupt: {}\n- RTT p50: {:.3} ms\n- RTT p99: {:.3} ms\n- RTT max: {:.3} ms\n",
+        payload_bytes as f64 * rate_hz * 8.0 / 1_000_000.0,
+        result.duration_seconds,
+        result.counters.sent,
+        result.counters.valid_replies,
+        result.counters.missing,
+        result.counters.late,
+        result.counters.duplicates,
+        result.counters.reordered,
+        result.counters.corrupt,
+        ns_ms(result.latency.p50_ns),
+        ns_ms(result.latency.p99_ns),
+        ns_ms(result.latency.max_ns),
+    )
+}
+
+fn stream_reliable(result: &model::SoakResult, target_hz: f64, achieved_hz: f64) -> bool {
+    let counters = &result.counters;
+    achieved_hz >= target_hz * 0.98
+        && counters.sent == counters.planned
+        && counters.valid_replies == counters.sent
+        && counters.missing == 0
+        && counters.late == 0
+        && counters.duplicates == 0
+        && counters.reordered == 0
+        && counters.corrupt == 0
+        && counters.foreign == 0
+        && counters.send_errors == 0
+}
+
+fn stream_error_events(counters: &PacketCounters) -> u64 {
+    counters.missing
+        + counters.late
+        + counters.duplicates
+        + counters.reordered
+        + counters.corrupt
+        + counters.foreign
+        + counters.send_errors
+}
+
+fn stream_sweep_markdown(sweep: &StreamSweepResult) -> String {
+    let mut output = format!(
+        "# Stream rate sweep\n\n- Payload: {} bytes\n- Duration per rate: {} seconds\n- Reliable range: 1 kHz -> {}\n- First unreliable rate: {}\n\n| Target kHz | Achieved kHz | Reliable | Error events | Valid / sent | Missing | Late | Duplicate | Reordered | Corrupt | Foreign | Send errors | p50 ms | p99 ms | Max ms |\n|---:|---:|:---:|---:|---:|---:|---:|---:|---:|---:|---:|---:|---:|---:|---:|\n",
+        sweep.payload_bytes,
+        sweep.duration_seconds_per_rate,
+        format_rate(sweep.highest_reliable_hz),
+        format_rate(sweep.first_unreliable_hz),
+    );
+    for point in &sweep.points {
+        let counters = &point.result.counters;
+        let latency = &point.result.latency;
+        output.push_str(&format!(
+            "| {:.3} | {:.3} | {} | {} | {} / {} | {} | {} | {} | {} | {} | {} | {} | {:.3} | {:.3} | {:.3} |\n",
+            point.target_hz / 1_000.0,
+            point.achieved_hz / 1_000.0,
+            if point.reliable { "yes" } else { "no" },
+            point.error_events,
+            counters.valid_replies,
+            counters.sent,
+            counters.missing,
+            counters.late,
+            counters.duplicates,
+            counters.reordered,
+            counters.corrupt,
+            counters.foreign,
+            counters.send_errors,
+            ns_ms(latency.p50_ns),
+            ns_ms(latency.p99_ns),
+            ns_ms(latency.max_ns),
+        ));
+    }
+    output.push_str("\nA point is reliable only when at least 98% of the requested rate is offered and every planned packet is sent and returned exactly once, in order, on time, and uncorrupted. Error events are the sum of missing, late, duplicate, reordered, corrupt, foreign, and send-error counters; one packet can contribute more than one event.\n");
+    output
+}
+
+fn format_rate(rate_hz: Option<f64>) -> String {
+    rate_hz
+        .map(|rate| format!("{:.3} kHz", rate / 1_000.0))
+        .unwrap_or_else(|| "none observed".to_owned())
+}
+
 fn ns_ms(value: u64) -> f64 {
     value as f64 / 1_000_000.0
 }
@@ -756,4 +1043,73 @@ fn command_output(program: &str, arguments: &[&str]) -> String {
 // signatures that return only filesystem I/O errors.
 mod io_result {
     pub type Result<T> = std::io::Result<T>;
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::model::SoakResult;
+    use crate::stats::LatencyStats;
+
+    fn stream_result(counters: PacketCounters) -> SoakResult {
+        SoakResult {
+            target_mbps: 0.8,
+            payload_sizes: vec![100],
+            duration_seconds: 1,
+            interval_seconds: 1,
+            intervals: Vec::new(),
+            counters,
+            latency: LatencyStats::default(),
+        }
+    }
+
+    #[test]
+    fn stream_reliability_requires_complete_exact_delivery() {
+        let perfect = PacketCounters {
+            planned: 1_000,
+            sent: 1_000,
+            valid_replies: 1_000,
+            ..PacketCounters::default()
+        };
+        assert!(stream_reliable(
+            &stream_result(perfect.clone()),
+            1_000.0,
+            1_000.0
+        ));
+
+        let mut loss = perfect.clone();
+        loss.valid_replies -= 1;
+        loss.missing = 1;
+        assert!(!stream_reliable(&stream_result(loss), 1_000.0, 1_000.0));
+
+        let mut late = perfect;
+        late.late = 1;
+        assert!(!stream_reliable(&stream_result(late), 1_000.0, 1_000.0));
+    }
+
+    #[test]
+    fn stream_reliability_rejects_an_unachieved_offer() {
+        let counters = PacketCounters {
+            planned: 960,
+            sent: 960,
+            valid_replies: 960,
+            ..PacketCounters::default()
+        };
+        assert!(!stream_reliable(&stream_result(counters), 1_000.0, 960.0));
+    }
+
+    #[test]
+    fn stream_error_events_sums_the_logged_error_categories() {
+        let counters = PacketCounters {
+            missing: 1,
+            late: 2,
+            duplicates: 3,
+            reordered: 4,
+            corrupt: 5,
+            foreign: 6,
+            send_errors: 7,
+            ..PacketCounters::default()
+        };
+        assert_eq!(stream_error_events(&counters), 28);
+    }
 }

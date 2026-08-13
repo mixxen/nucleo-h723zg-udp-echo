@@ -462,6 +462,40 @@ impl BenchSocket {
         })
     }
 
+    /// Run a fixed-size, fixed-frequency datagram stream.
+    #[allow(clippy::too_many_arguments)]
+    pub fn fixed_rate(
+        &self,
+        payload_bytes: usize,
+        rate_hz: f64,
+        duration: Duration,
+        interval: Duration,
+        drain: Duration,
+        timeout: Duration,
+        window: usize,
+        run_id: u64,
+    ) -> io::Result<SoakResult> {
+        if payload_bytes < HEADER_LEN || !rate_hz.is_finite() || rate_hz <= 0.0 {
+            return Err(io::Error::new(
+                io::ErrorKind::InvalidInput,
+                format!("payload must be at least {HEADER_LEN} bytes and rate must be positive"),
+            ));
+        }
+
+        let target_mbps = payload_bytes as f64 * rate_hz * 8.0 / 1_000_000.0;
+        self.soak(
+            &[payload_bytes],
+            target_mbps,
+            duration,
+            interval,
+            drain,
+            timeout,
+            window,
+            run_id,
+            run_id,
+        )
+    }
+
     #[allow(clippy::too_many_arguments)]
     fn load(
         &self,

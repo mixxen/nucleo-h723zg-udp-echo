@@ -513,6 +513,8 @@ The repeatable latency, bandwidth, and reliability methodology is specified
 in [BENCHMARK_PLAN.md](BENCHMARK_PLAN.md).
 The completed native-RMII, W5500-MACRAW, and W5500-offload comparison is in
 [BENCHMARK_REPORT.md](BENCHMARK_REPORT.md).
+The 100-byte, 1 kHz mirror-command results are in
+[STREAM_BENCHMARK_REPORT.md](STREAM_BENCHMARK_REPORT.md).
 
 Run the short end-to-end validation profile from the repository root with:
 
@@ -526,3 +528,35 @@ Run the short end-to-end validation profile from the repository root with:
 Omit `-Quick` for the full 10,000-sample, 100-burst-repetition, 15-minute-soak
 baseline. The runner flashes each benchmark image in turn; it does not run
 both Ethernet interfaces concurrently.
+
+For the representative fast-steering-mirror command stream, first confirm the
+current DHCP leases and run:
+
+```powershell
+.\Rust\tools\run-stream-benchmark-comparison.ps1 `
+    -NativeIp 192.168.68.117 `
+    -W5500Ip 192.168.68.74 `
+    -Quick
+```
+
+Remove `-Quick` for the normal 15-minute run. The tool sends exactly 100-byte
+datagrams at 1,000 Hz and records every missing, late, duplicate, reordered,
+or corrupt reply plus RTT percentiles. W5500 packet reception is now driven by
+its active-low INTn signal through shield D2 to NUCLEO PG14/EXTI14. A one-second
+timer remains only for DHCP/link maintenance and missed-interrupt recovery;
+it is not the normal packet path.
+
+The same runner now follows the 1 kHz soak with a rate sweep from 1 through
+20 kHz in 1 kHz increments. Its final table includes `HighestReliableKHz` and
+`FirstUnreliableKHz`; `rate-comparison.csv` contains the total error events and
+detailed error counters at every increment for every architecture. To run
+only the sweep against the currently flashed image:
+
+```powershell
+.\Rust\tools\udp-benchmark\target\x86_64-pc-windows-msvc\release\udp-benchmark.exe stream-sweep `
+    --board 192.168.68.74 `
+    --duration-seconds 10
+```
+
+The tool records achieved rate separately so host pacing limits are not
+misreported as board packet loss.

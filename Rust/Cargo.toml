@@ -62,6 +62,7 @@ required-features = ["host-tests"]
 [target.'cfg(target_arch = "arm")'.dependencies]
 embassy-stm32 = { version = "0.6.0", features = [
     "defmt",
+    "exti",
     "stm32h723zg",
     "time-driver-tim2",
 ] }
