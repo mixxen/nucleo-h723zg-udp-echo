@@ -28,9 +28,10 @@ pub fn new(
     mosi: Peri<'static, PB5>,
     miso: Peri<'static, PA6>,
     chip_select: Peri<'static, PD14>,
+    frequency_hz: u32,
 ) -> Device {
     let mut config = spi::Config::default();
-    config.frequency = Hertz(20_000_000);
+    config.frequency = Hertz(frequency_hz);
     let bus = Spi::new_blocking(spi1, sck, mosi, miso, config);
     let chip_select = Output::new(chip_select, Level::High, Speed::VeryHigh);
     ExclusiveDevice { bus, chip_select }

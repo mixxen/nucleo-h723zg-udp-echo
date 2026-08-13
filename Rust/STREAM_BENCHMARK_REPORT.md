@@ -21,10 +21,10 @@ C-versus-Rust interpretation:
 
 | Parameter | C/LwIP native RMII | Rust/Embassy native RMII | Rust/Embassy W5500 MACRAW | Rust W5500 offload |
 |---|---|---|---|---|
-| MCU / AHB clock | 520 / 260 MHz | 400 / 200 MHz normally; 520 / 260 MHz with `performance` | 400 / 200 MHz | 400 / 200 MHz |
+| MCU / AHB clock | 520 / 260 MHz | 400 / 200 MHz normally; 520 / 260 MHz with `performance` | 400 / 200 MHz | 400 / 200 MHz normally; 520 / 260 MHz with `performance` |
 | MCU clock source | HSE bypass + PLL | HSI + PLL | HSI + PLL | HSI + PLL |
 | Ethernet device path | STM32 MAC + LAN8742A | STM32 MAC + LAN8742A | W5500 MACRAW | W5500 hardwired sockets |
-| MCU-to-Ethernet transport | RMII, 50 MHz reference | RMII, 50 MHz reference | SPI1, 20 MHz | SPI1, 20 MHz |
+| MCU-to-Ethernet transport | RMII, 50 MHz reference | RMII, 50 MHz reference | SPI1, 20 MHz requested | SPI1, 50 MHz release; approximately 32.5 MHz with `performance` |
 | Physical Ethernet link | Negotiated 10/100 Mb/s | Negotiated 10/100 Mb/s | Negotiated 10/100 Mb/s | Negotiated 10/100 Mb/s |
 | IPv4/UDP stack location | MCU: LwIP raw API | MCU: Embassy network stack (`xarxa` at pinned revision) | MCU: Embassy network stack (`xarxa` at pinned revision) | W5500 hardware |
 | IPv4/UDP checksums | STM32 MAC hardware offload | STM32 MAC hardware RX/TX offload | MCU software | W5500 hardware |
@@ -34,8 +34,8 @@ C-versus-Rust interpretation:
 | DMA/raw-frame queues | 4 RX + 4 TX descriptors; 12 × 1,000-byte RX buffers | 4 RX + 4 TX packet queue | 4 RX + 4 TX MCU queues of 1,514-byte frames, plus W5500 memory | W5500 socket memory; allocation left at chip defaults |
 | UDP application buffers | LwIP pbufs; 14 KiB LwIP heap | 4 RX + 4 TX slots with 6,144-byte RX/TX storage; 1,536-byte work buffer | Same Embassy UDP buffers as native Rust | 1,536-byte MCU work buffer; W5500 socket RX/TX memory |
 | DHCP fallback | After more than 4 attempts: `192.168.0.10/24` | After 30 s: `192.168.0.10/24` | After 30 s: `192.168.0.10/24` | No static fallback |
-| Release optimization | GCC `-O2` | Rust `opt-level="z"` normally; `3` for `performance`; fat LTO | Rust `opt-level="z"`, fat LTO | Rust `opt-level="z"`, fat LTO |
-| Cortex-M7 cache policy | I-cache + D-cache; DMA memory made non-cacheable by MPU | I-cache; D-cache off for DMA coherency | I-cache; D-cache off for SPI DMA coherency | I-cache; D-cache off for SPI DMA coherency |
+| Release optimization | GCC `-O2` | Rust `opt-level="z"` normally; `3` for `performance`; fat LTO | Rust `opt-level="z"`, fat LTO | Rust `opt-level="z"` normally; `3` for `performance`; fat LTO |
+| Cortex-M7 cache policy | I-cache + D-cache; DMA memory made non-cacheable by MPU | I-cache; D-cache off for DMA coherency | I-cache; D-cache off; current SPI path is CPU-driven | I-cache; D-cache off; current SPI path is CPU-driven |
 | Success-path logging during benchmark | None | Disabled | Disabled | Disabled |
 | Firmware CPU/stack telemetry | Not implemented | Optional profiling feature | Optional profiling feature | Optional profiling feature |
 
@@ -150,6 +150,53 @@ margin over the 1 kHz requirement. More repeated C trials are needed before
 interpreting the residual difference as architectural rather than host/LAN
 variation.
 
+## W5500 hardware-offload optimization
+
+The offload path was optimized separately using the current interrupt-driven
+firmware as its control. WIZnet's official EVB loopback example informed the
+tight drain loop and explicit socket-oriented design, while the W5500's
+variable-data-length SPI mode was already provided by `w5500-ll`. The old EVB
+example itself uses only a 10 MHz blocking SPI implementation, so it is an API
+reference rather than a modern DMA performance baseline.
+
+Three changes were retained:
+
+1. the ordinary offload build requests a 50 MHz SPI clock instead of 20 MHz;
+2. a separate offload `performance` build uses `opt-level=3` and the same
+   520/260 MHz MCU/AHB clock as the native performance build; and
+3. the echo server caches its last UDP peer, avoiding a redundant six-byte
+   W5500 destination-register write for every packet in a same-host stream.
+
+| Offload stage | MCU | Effective SPI | Strict zero-error sweep | Saturation plateau | 1 kHz p50 / p99 |
+|---|---:|---:|---:|---:|---:|
+| Fresh control | 400 MHz, size (`z`) | existing 20 MHz request | 1-7 kHz | 7,034 valid/s | 0.296 / 0.403 ms |
+| SPI clock only | 400 MHz, size (`z`) | 50 MHz | 1-7 kHz | 7,554 valid/s | 0.288 / 0.977 ms |
+| Performance clock/compiler | 520 MHz, speed (`3`) | approximately 32.5 MHz | 1-11 kHz | 11,561 valid/s | 0.234 / 0.403 ms |
+| **Retained performance + cached peer** | **520 MHz, speed (`3`)** | **approximately 32.5 MHz** | **1-12 kHz on repeat sweep** | **12,117 valid/s** | **0.231 / 0.435 ms** |
+
+The final plateau is 72% above the fresh control. Its first full sweep had
+four missing packets at 5 kHz but was clean from 6 through 12 kHz; a repeated
+1-12 kHz sweep and a separate 50,000-packet 5 kHz run were entirely clean.
+A 30-second 12 kHz trial returned 359,870/360,000 packets (0.036% loss), so
+11 kHz remains the conservative sustained operating point until longer
+repeated trials establish otherwise. All 1 kHz trials returned 30,000/30,000.
+
+An attempted 520 MHz build put SPI1 near 65 MHz. It obtained no DHCP lease and
+answered neither UDP nor ARP through the stacked shield headers, despite that
+rate being below the chip's nominal 80 MHz limit. The retained performance
+clock uses a larger PLL divider and approximately 32.5 MHz SPI instead. This
+records the tested board-level limit without claiming whether the failure was
+inside the shield, connector signal path, or MCU SPI timing.
+
+DMA was reviewed but not added in this pass. The high-level hardwired-socket
+API is synchronous, and a DMA transfer cannot overlap the next W5500 command
+on the same serial bus. Adding a synchronous-to-async DMA bridge would mainly
+reduce MCU busy cycles while adding setup cost to many 1-9 byte register
+transactions. The measured first priorities were therefore SPI clock,
+compiler/CPU speed, and transaction removal. DMA remains a useful follow-up
+for CPU-utilization and large-payload measurements, not an assumed throughput
+win for the 100-byte stream.
+
 ## Connected-board result
 
 Measured on 2026-08-12 and 2026-08-13 using the same Windows host, router, NUCLEO-H723ZG,
@@ -186,32 +233,33 @@ reordered, corrupt, foreign, or send-error packets.
 | Native RMII + Embassy | 1 through 7 kHz | 8 kHz | 21,462 / 24,000 valid; 2,538 error events |
 | Native RMII performance + full checksum offload | 1 through 11 kHz | 12 kHz | Host sent 35,999 / 36,000 planned; all sent packets valid |
 | W5500 MACRAW + Embassy | 1 kHz only | 2 kHz | 5,705 / 6,000 valid; 4,783 error events |
-| W5500 hardware offload | 1 through 3 kHz | 4 kHz | 10,215 / 12,000 valid; 1,785 error events |
+| W5500 hardware offload, fresh control | 1 through 7 kHz | 8 kHz | 21,104 / 24,000 valid; 2,896 missing |
+| Optimized W5500 hardware offload | 1 through 12 kHz on repeated sweep | 13 kHz | 36,365 / 39,000 valid; 2,635 missing |
 
 ### Error events at each increment
 
-| Target kHz | C/LwIP RMII | Rust/Embassy RMII | Rust performance + full checksum | W5500 offload | W5500 MACRAW |
-|---:|---:|---:|---:|---:|---:|
-| 1 | 0 | 0 | 0 | 0 | 0 |
-| 2 | 0 | 0 | 0 | 0 | 4,783 |
-| 3 | 0 | 0 | 0 | 0 | 8,777 |
-| 4 | 0 | 0 | 0 | 1,785 | 11,838 |
-| 5 | 0 | 0 | 0 | 4,785 | 14,864 |
-| 6 | 0 | 0 | 0 | 7,785 | 17,875 |
-| 7 | 0 | 0 | 0 | 10,785 | 20,883 |
-| 8 | 0 | 2,538 | 0 | 13,787 | 23,888 |
-| 9 | 0 | 6,969 | 0 | 16,785 | 26,892 |
-| 10 | 0 | 9,839 | 0 | 19,785 | 29,896 |
-| 11 | 0 | 15,042 | 0 | 22,784 | 32,896 |
-| 12 | 0 | 19,380 | 0 | 25,785 | 35,898 |
-| 13 | 0 | 23,235 | 1 | 28,785 | 38,900 |
-| 14 | 0 | 27,334 | 0 | 31,785 | 41,900 |
-| 15 | 0 | 31,350 | 0 | 34,782 | 44,903 |
-| 16 | 1 | 35,565 | 2 | 37,784 | 47,904 |
-| 17 | 0 | 39,568 | 1 | 40,784 | 50,904 |
-| 18 | 23 | 43,800 | 2 | 43,785 | 53,904 |
-| 19 | 0 | 47,876 | 2 | 46,787 | 56,904 |
-| 20 | 0 | 52,088 | 0 | 49,785 | 59,904 |
+| Target kHz | C/LwIP RMII | Rust/Embassy RMII | Rust performance + full checksum | W5500 offload | Optimized W5500 offload | W5500 MACRAW |
+|---:|---:|---:|---:|---:|---:|---:|
+| 1 | 0 | 0 | 0 | 0 | 0 | 0 |
+| 2 | 0 | 0 | 0 | 0 | 0 | 4,783 |
+| 3 | 0 | 0 | 0 | 0 | 0 | 8,777 |
+| 4 | 0 | 0 | 0 | 0 | 0 | 11,838 |
+| 5 | 0 | 0 | 0 | 0 | 4 | 14,864 |
+| 6 | 0 | 0 | 0 | 0 | 0 | 17,875 |
+| 7 | 0 | 0 | 0 | 0 | 0 | 20,883 |
+| 8 | 0 | 2,538 | 0 | 2,896 | 0 | 23,888 |
+| 9 | 0 | 6,969 | 0 | 5,894 | 0 | 26,892 |
+| 10 | 0 | 9,839 | 0 | 8,893 | 0 | 29,896 |
+| 11 | 0 | 15,042 | 0 | 11,897 | 0 | 32,896 |
+| 12 | 0 | 19,380 | 0 | 14,896 | 0 | 35,898 |
+| 13 | 0 | 23,235 | 1 | 17,897 | 2,635 | 38,900 |
+| 14 | 0 | 27,334 | 0 | 20,898 | 5,639 | 41,900 |
+| 15 | 0 | 31,350 | 0 | 23,898 | 8,629 | 44,903 |
+| 16 | 1 | 35,565 | 2 | 26,897 | 11,632 | 47,904 |
+| 17 | 0 | 39,568 | 1 | 29,896 | 14,651 | 50,904 |
+| 18 | 23 | 43,800 | 2 | 32,895 | 17,646 | 53,904 |
+| 19 | 0 | 47,876 | 2 | 35,894 | 20,646 | 56,904 |
+| 20 | 0 | 52,088 | 0 | 38,898 | 23,648 | 59,904 |
 
 An error event is one missing, late, duplicate, reordered, corrupt, foreign,
 or send-error observation. A packet can contribute more than one event; for
@@ -221,6 +269,9 @@ The optimized Rust run has zero error events at 12 kHz because every packet
 actually sent was returned correctly, but it is still marked unreliable in
 the preceding table: the Windows host sent 35,999 of 36,000 planned packets
 and therefore did not achieve the exact requested offered load.
+The optimized W5500 column is from its full 1-20 kHz sweep. Its four 5 kHz
+errors did not recur in either a dedicated 50,000-packet trial or the repeated
+1-12 kHz sweep; both later trials were zero-error.
 
 These are preliminary knees from short trials. Confirm with the default
 30-second dwell, repeat the boundary rates, and use a longer soak at the

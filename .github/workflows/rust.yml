@@ -83,6 +83,9 @@ jobs:
       - name: Lint benchmark-mode offload UDP server
         run: cargo clippy --locked --release --no-default-features --features wiznet-offload,benchmark --bin nucleo-h723zg-w5500-offload-udp-echo -- -D warnings
 
+      - name: Lint performance-mode offload UDP server
+        run: cargo clippy --locked --profile performance --no-default-features --features wiznet-offload,performance --bin nucleo-h723zg-w5500-offload-udp-echo -- -D warnings
+
       - name: Lint profiled W5500 offload firmware
         run: cargo clippy --locked --release --no-default-features --features wiznet-offload,profiling --bin nucleo-h723zg-w5500-offload-udp-echo -- -D warnings
 

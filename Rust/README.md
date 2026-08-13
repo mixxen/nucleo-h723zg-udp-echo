@@ -574,7 +574,7 @@ The tool records achieved rate separately so host pacing limits are not
 misreported as board packet loss. `-Quick` keeps development feedback short:
 30 seconds for the 1 kHz stream and 3 seconds at each sweep rate.
 
-### Native-RMII performance build
+### Speed-oriented performance builds
 
 The normal Rust release remains optimized for MCUboot image size. For a fairer
 throughput comparison with the C/LwIP `-O2` image, build and flash the separate
@@ -587,9 +587,21 @@ speed-oriented native image:
 
 This selects Cargo `opt-level=3`, disables successful-packet logging, runs the
 STM32H723 at 520 MHz with a 260 MHz AHB, and retains Embassy's interrupt-driven
-Ethernet architecture. It does not change the managed application or either
-W5500 build. See the optimization results in
+Ethernet architecture. It does not change the managed application or W5500
+MACRAW build. See the optimization results in
 [STREAM_BENCHMARK_REPORT.md](STREAM_BENCHMARK_REPORT.md#rustembassy-native-optimization).
+
+The W5500 hardwired-socket application has an equivalent performance build:
+
+```powershell
+.\Rust\tools\build-signed.ps1 -Version 0.4.4 -W5500Offload -Performance
+.\Rust\tools\flash.ps1 -SkipBuild -W5500Offload -Performance
+```
+
+That image uses the same MCU/AHB clock and compiler optimization, while SPI1
+runs at approximately 32.5 MHz to remain reliable through the stacked shield
+headers. Results are in
+[STREAM_BENCHMARK_REPORT.md](STREAM_BENCHMARK_REPORT.md#w5500-hardware-offload-optimization).
 
 All Embassy crates are patched together to the exact reviewed upstream
 revision `0af1937a5ac77f52fea943b677088c38ef9e91c6`. That revision adds complete

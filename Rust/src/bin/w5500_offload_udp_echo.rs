@@ -39,7 +39,10 @@ async fn main(_spawner: Spawner) -> ! {
 
     let ready_led = Output::new(p.PE1, Level::Low, Speed::Low);
     let error_led = Output::new(p.PB14, Level::High, Speed::Low);
-    let spi = w5500_spi::new(p.SPI1, p.PA5, p.PB5, p.PA6, p.PD14);
+    // W5500 supports an 80 MHz SPI clock. Use 50 MHz here as a conservative
+    // first step for the longer Arduino-shield traces; MACRAW remains at its
+    // measured 20 MHz baseline so the offload experiment stays isolated.
+    let spi = w5500_spi::new(p.SPI1, p.PA5, p.PB5, p.PA6, p.PD14, 50_000_000);
     let mut interrupt = ExtiInput::new(p.PG14, p.EXTI14, Pull::Up, Irqs);
     let mut network = match w5500_offload::Network::new(spi, ready_led, error_led).await {
         Ok(network) => network,

@@ -16,28 +16,35 @@ pub fn init(needs_spi1_clock: bool) -> Peripherals {
     {
         use embassy_stm32::rcc::*;
 
-        let native_performance = cfg!(feature = "performance") && !needs_spi1_clock;
+        let performance_clock = cfg!(feature = "performance");
 
         config.rcc.hsi = Some(HSIPrescaler::Div1);
         config.rcc.csi = true;
         config.rcc.pll1 = Some(Pll {
             source: PllSource::Hsi,
-            prediv: if native_performance {
+            prediv: if performance_clock {
                 PllPreDiv::Div8
             } else {
                 PllPreDiv::Div4
             },
-            mul: if native_performance {
+            mul: if performance_clock {
                 PllMul::Mul65
             } else {
                 PllMul::Mul50
             },
-            divp: Some(if native_performance {
+            divp: Some(if performance_clock {
                 PllDiv::Div1
             } else {
                 PllDiv::Div2
             }),
-            divq: needs_spi1_clock.then_some(PllDiv::Div4),
+            // At 520 MHz, DIV4 would clock SPI1 at 65 MHz after its minimum
+            // /2 baud divider. That proved unreliable through the stacked
+            // Arduino headers, so keep performance-mode SPI1 near 32.5 MHz.
+            divq: needs_spi1_clock.then_some(if performance_clock {
+                PllDiv::Div8
+            } else {
+                PllDiv::Div4
+            }),
             divr: None,
         });
         config.rcc.sys = Sysclk::Pll1P;
@@ -46,7 +53,7 @@ pub fn init(needs_spi1_clock: bool) -> Peripherals {
         config.rcc.apb2_pre = APBPrescaler::Div2;
         config.rcc.apb3_pre = APBPrescaler::Div2;
         config.rcc.apb4_pre = APBPrescaler::Div2;
-        config.rcc.voltage_scale = if native_performance {
+        config.rcc.voltage_scale = if performance_clock {
             VoltageScale::Scale0
         } else {
             VoltageScale::Scale1

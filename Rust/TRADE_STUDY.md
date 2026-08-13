@@ -51,8 +51,8 @@ Current release-build results (2026-08-13):
 |---|---:|---:|---:|---:|---:|
 | C/LwIP native RMII | 620 | 29 | 649 | 126,824 | 53,051 |
 | Native RMII + Embassy | 144 | 48 | 192 | 59,420 | 29,488 |
-| W5500 MACRAW + Embassy | 263 | 48 | 311 | 66,160 | 30,232 |
-| W5500 hardware offload | 261 | 53 | 314 | 25,236 | 3,132 |
+| W5500 MACRAW + Embassy | 264 | 48 | 312 | 66,160 | 30,232 |
+| W5500 hardware offload | 262 | 60 | 322 | 25,444 | 3,188 |
 
 Image size is not proportional to first-party NCLOC because it also contains
 the selected C libraries or Rust crates and their compiled protocol
@@ -132,6 +132,24 @@ application NCLOC. The performance ELF occupies 70,948 bytes of flash and
 29,504 bytes of static MCU RAM, and its signed image is 71,608 bytes. See the
 controlled trials and limitations in
 [STREAM_BENCHMARK_REPORT.md](STREAM_BENCHMARK_REPORT.md#rustembassy-native-optimization).
+
+### Optimized W5500-offload result
+
+The W5500 hardwired-socket path now has its own performance build. It combines
+`opt-level=3`, a 520/260 MHz MCU/AHB clock, an approximately 32.5 MHz stable
+SPI clock, and a cached UDP destination register. Its repeated short sweep was
+zero-error from 1 through 12 kHz, compared with 1 through 7 kHz for the fresh
+control, and its saturation plateau increased from about 7,034 to 12,117
+valid packets/s. At the 1 kHz requirement it returned 30,000/30,000 with
+0.231/0.435 ms p50/p99 RTT.
+
+The cached peer increases the offload UDP-server metric by seven NCLOC and
+static RAM by 56 bytes; making SPI frequency explicit adds one shared bring-up
+NCLOC to both W5500 variants. The offload performance signed image is 36,608
+bytes. A 30-second 12 kHz run had 130 missing of 360,000, so 11 kHz remains
+the conservative sustained point. Full staged results and the reason DMA was
+deferred are in
+[STREAM_BENCHMARK_REPORT.md](STREAM_BENCHMARK_REPORT.md#w5500-hardware-offload-optimization).
 
 The previous MACRAW timer shim was removed, saving first-party bring-up code.
 Offload gained explicit socket-interrupt setup and safe flag clearing, so its

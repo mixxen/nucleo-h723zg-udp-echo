@@ -16,9 +16,9 @@ host-tests = []
 # Preserve startup/error diagnostics but omit successful per-packet RTT logs
 # during controlled throughput and reliability measurements.
 benchmark = []
-# Speed-oriented native-RMII comparison build: suppress packet logs and use
-# the board's 520 MHz performance clock. The custom Cargo profile below uses
-# opt-level 3 without changing the size-oriented production release.
+# Speed-oriented native-RMII and W5500-offload comparison build: suppress
+# packet logs and use the board's 520 MHz performance clock. The custom Cargo
+# profile below uses opt-level 3 without changing the size-oriented release.
 performance = ["benchmark"]
 # Adds executor-cycle telemetry and paints the Cortex-M stack for high-water
 # measurement. Keep this separate because instrumentation has measurable cost.
