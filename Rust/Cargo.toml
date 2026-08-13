@@ -16,6 +16,9 @@ host-tests = []
 # Preserve startup/error diagnostics but omit successful per-packet RTT logs
 # during controlled throughput and reliability measurements.
 benchmark = []
+# Adds executor-cycle telemetry and paints the Cortex-M stack for high-water
+# measurement. Keep this separate because instrumentation has measurable cost.
+profiling = ["benchmark", "embassy-executor/trace", "cortex-m-rt/paint-stack"]
 # Hardware acceptance-test only: deliberately withhold MCUboot confirmation
 # so the next reset must restore the previous image.
 rollback-test = []

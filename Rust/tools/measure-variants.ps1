@@ -1,5 +1,12 @@
 [CmdletBinding()]
-param([switch]$Benchmark)
+param(
+    [switch]$Benchmark,
+    [switch]$Profiling
+)
+
+if ($Benchmark -and $Profiling) {
+    throw "Choose only one of -Benchmark or -Profiling."
+}
 
 $ErrorActionPreference = "Stop"
 $rustRoot = Split-Path -Parent $PSScriptRoot
@@ -54,6 +61,7 @@ $variants = @(
         Server = @("src/servers/embassy_udp_echo.rs")
         Artifact = "artifacts/firmware-native-udp-signed.bin"
         BenchmarkArtifact = "artifacts/firmware-native-udp-benchmark-signed.bin"
+        ProfilingArtifact = "artifacts/firmware-native-udp-profiling-signed.bin"
         Elf = "nucleo-h723zg-native-rmii-udp-echo"
     },
     [pscustomobject]@{
@@ -67,6 +75,7 @@ $variants = @(
         Server = @("src/servers/embassy_udp_echo.rs")
         Artifact = "artifacts/firmware-w5500-signed.bin"
         BenchmarkArtifact = "artifacts/firmware-w5500-benchmark-signed.bin"
+        ProfilingArtifact = "artifacts/firmware-w5500-profiling-signed.bin"
         Elf = "nucleo-h723zg-w5500-udp-echo"
     },
     [pscustomobject]@{
@@ -79,6 +88,7 @@ $variants = @(
         Server = @("src/servers/w5500_offload_udp_echo.rs")
         Artifact = "artifacts/firmware-w5500-offload-signed.bin"
         BenchmarkArtifact = "artifacts/firmware-w5500-offload-benchmark-signed.bin"
+        ProfilingArtifact = "artifacts/firmware-w5500-offload-profiling-signed.bin"
         Elf = "nucleo-h723zg-w5500-offload-udp-echo"
     }
 )
@@ -86,7 +96,13 @@ $variants = @(
 $results = foreach ($variant in $variants) {
     $bringUpLines = Measure-CodeLines $variant.BringUp
     $serverLines = Measure-CodeLines $variant.Server
-    $artifact = if ($Benchmark) { $variant.BenchmarkArtifact } else { $variant.Artifact }
+    $artifact = if ($Profiling) {
+        $variant.ProfilingArtifact
+    } elseif ($Benchmark) {
+        $variant.BenchmarkArtifact
+    } else {
+        $variant.Artifact
+    }
     $artifactPath = Join-Path $rustRoot $artifact
     $signedBytes = if (Test-Path -LiteralPath $artifactPath) {
         (Get-Item -LiteralPath $artifactPath).Length

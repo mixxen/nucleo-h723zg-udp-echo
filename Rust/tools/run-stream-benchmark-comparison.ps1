@@ -1,7 +1,7 @@
 [CmdletBinding()]
 param(
     [ValidatePattern("^\d+\.\d+\.\d+(\+\d+)?$")]
-    [string]$Version = "0.4.1",
+    [string]$Version = "0.4.2",
     [Parameter(Mandatory)]
     [string]$NativeIp,
     [Parameter(Mandatory)]
@@ -23,9 +23,9 @@ if (-not $OutputRoot) {
 }
 $OutputRoot = [IO.Path]::GetFullPath($OutputRoot)
 New-Item -ItemType Directory -Path $OutputRoot -Force | Out-Null
-$duration = if ($Quick) { 30 } else { 900 }
+$duration = if ($Quick) { 30 } else { 3600 }
 $interval = if ($Quick) { 10 } else { 60 }
-$sweepDuration = if ($Quick) { 3 } else { 10 }
+$sweepDuration = if ($Quick) { 3 } else { 30 }
 
 & cargo test --locked --manifest-path (Join-Path $benchmarkRoot "Cargo.toml") --target $hostTarget
 if ($LASTEXITCODE -ne 0) { throw "Benchmark tool tests failed." }
@@ -42,13 +42,13 @@ $rows = @()
 $rateRows = @()
 foreach ($variant in $variants) {
     if (-not $SkipFirmwareBuild) {
-        $build = @{ Version = $Version; Benchmark = $true }
+        $build = @{ Version = $Version; Profiling = $true }
         $build[$variant.BuildSwitch] = $true
         & (Join-Path $PSScriptRoot "build-signed.ps1") @build
         if ($LASTEXITCODE -ne 0) { throw "Firmware build failed for $($variant.Name)." }
     }
 
-    $flash = @{ SkipBuild = $true; Benchmark = $true }
+    $flash = @{ SkipBuild = $true; Profiling = $true }
     $flash[$variant.BuildSwitch] = $true
     & (Join-Path $PSScriptRoot "flash.ps1") @flash
     if ($LASTEXITCODE -ne 0) { throw "Firmware flash failed for $($variant.Name)." }
@@ -65,15 +65,16 @@ foreach ($variant in $variants) {
 
     $output = Join-Path $OutputRoot $variant.Slug
     & $benchmarkExe stream --board $variant.Ip --payload-bytes 100 --rate-hz 1000 `
-        --duration-seconds $duration --interval-seconds $interval --output-dir $output
+        --duration-seconds $duration --interval-seconds $interval --profile --output-dir $output
     if ($LASTEXITCODE -ne 0) { throw "Stream benchmark failed for $($variant.Name)." }
 
     $sweepOutput = Join-Path $output "rate-sweep"
     & $benchmarkExe stream-sweep --board $variant.Ip --payload-bytes 100 `
-        --duration-seconds $sweepDuration --output-dir $sweepOutput
+        --duration-seconds $sweepDuration --profile --output-dir $sweepOutput
     if ($LASTEXITCODE -ne 0) { throw "Stream rate sweep failed for $($variant.Name)." }
 
-    $result = Get-Content (Join-Path $output "stream.json") | ConvertFrom-Json
+    $stream = Get-Content (Join-Path $output "stream.json") | ConvertFrom-Json
+    $result = $stream.result
     $sweep = Get-Content (Join-Path $sweepOutput "stream-sweep.json") | ConvertFrom-Json
     foreach ($point in $sweep.points) {
         $rateRows += [pscustomobject]@{
@@ -89,6 +90,10 @@ foreach ($variant in $variants) {
             Corrupt = $point.result.counters.corrupt
             Foreign = $point.result.counters.foreign
             SendErrors = $point.result.counters.send_errors
+            ExecutorCpuPercent = $point.profile.executor_cpu_percent
+            CyclesPerValid = $point.profile.cycles_per_valid_packet
+            StackHighWaterBytes = $point.profile.stack_high_water_bytes
+            StaticRamBytes = $point.profile.static_ram_bytes
         }
     }
     $rows += [pscustomobject]@{
@@ -103,6 +108,10 @@ foreach ($variant in $variants) {
         P50ms = $result.latency.p50_ns / 1e6
         P99ms = $result.latency.p99_ns / 1e6
         MaximumMs = $result.latency.max_ns / 1e6
+        ExecutorCpuPercent = $stream.profile.executor_cpu_percent
+        CyclesPerValid = $stream.profile.cycles_per_valid_packet
+        StackHighWaterBytes = $stream.profile.stack_high_water_bytes
+        StaticRamBytes = $stream.profile.static_ram_bytes
         HighestReliableKHz = if ($null -eq $sweep.highest_reliable_hz) { $null } else { $sweep.highest_reliable_hz / 1000 }
         FirstUnreliableKHz = if ($null -eq $sweep.first_unreliable_hz) { $null } else { $sweep.first_unreliable_hz / 1000 }
     }

@@ -9,6 +9,12 @@ mod board;
 mod embassy_network;
 #[path = "../bringup/native_rmii.rs"]
 mod native_rmii;
+#[cfg(feature = "profiling")]
+#[path = "../profiling.rs"]
+mod profiling;
+#[cfg(feature = "profiling")]
+#[path = "../servers/embassy_profiling.rs"]
+mod profiling_server;
 #[path = "../servers/embassy_udp_echo.rs"]
 mod udp_server;
 
@@ -49,5 +55,7 @@ async fn main(spawner: Spawner) -> ! {
         stack, ready_led, error_led
     )));
     spawner.spawn(unwrap!(udp_server::run(stack)));
+    #[cfg(feature = "profiling")]
+    spawner.spawn(unwrap!(profiling_server::run(stack)));
     core::future::pending().await
 }

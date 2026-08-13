@@ -5,6 +5,12 @@
 
 #[path = "../board.rs"]
 mod board;
+#[cfg(feature = "profiling")]
+#[path = "../profiling.rs"]
+mod profiling;
+#[cfg(feature = "profiling")]
+#[path = "../servers/w5500_offload_profiling.rs"]
+mod profiling_server;
 #[path = "../servers/w5500_offload_udp_echo.rs"]
 mod udp_server;
 #[path = "../bringup/w5500_offload.rs"]
@@ -52,6 +58,8 @@ async fn main(_spawner: Spawner) -> ! {
     loop {
         if network.poll(maintenance_due) {
             server.poll(network.device_mut());
+            #[cfg(feature = "profiling")]
+            profiling_server::poll(network.device_mut());
         }
 
         // Packets normally wake us immediately through W5500 INTn. The

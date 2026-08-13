@@ -110,6 +110,8 @@ pub struct StreamSweepPoint {
     pub reliable: bool,
     /// Sum of all observed error events; see the individual counters for detail.
     pub error_events: u64,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub profile: Option<ProfileMetrics>,
     pub result: SoakResult,
 }
 
@@ -120,6 +122,29 @@ pub struct StreamSweepResult {
     pub highest_reliable_hz: Option<f64>,
     pub first_unreliable_hz: Option<f64>,
     pub points: Vec<StreamSweepPoint>,
+}
+
+#[derive(Clone, Debug, Serialize, Deserialize)]
+pub struct StreamResult {
+    pub payload_bytes: usize,
+    pub target_hz: f64,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub profile: Option<ProfileMetrics>,
+    pub result: SoakResult,
+}
+
+#[derive(Clone, Debug, Serialize, Deserialize)]
+pub struct ProfileMetrics {
+    pub cpu_hz: u32,
+    pub time_ticks_hz: u32,
+    pub busy_cycles: u64,
+    pub elapsed_ticks: u64,
+    pub executor_polls: u64,
+    pub executor_cpu_percent: f64,
+    pub cycles_per_valid_packet: f64,
+    pub stack_high_water_bytes: u32,
+    pub stack_capacity_bytes: u32,
+    pub static_ram_bytes: u32,
 }
 
 #[derive(Clone, Debug, Serialize, Deserialize)]

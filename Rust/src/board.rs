@@ -42,5 +42,8 @@ pub fn init(needs_spi1_clock: bool) -> Peripherals {
         cortex_m::interrupt::enable();
     }
 
+    #[cfg(feature = "profiling")]
+    crate::profiling::init();
+
     peripherals
 }

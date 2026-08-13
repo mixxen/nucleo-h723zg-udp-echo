@@ -19,6 +19,11 @@ pub const W5500_MAC_ADDRESS: [u8; 6] = [0x02, 0x00, 0x00, 0x00, 0x55, 0x00];
 /// UDP port assigned to the traditional echo protocol.
 pub const UDP_ECHO_PORT: u16 = 7;
 
+/// UDP endpoint used only by profiling benchmark images.
+pub const PROFILING_PORT: u16 = 5001;
+pub const PROFILING_MAGIC: [u8; 8] = *b"STRMPRF1";
+pub const PROFILING_WIRE_SIZE: usize = 48;
+
 /// Unprivileged TCP port used by the embedded SSH server.
 pub const SSH_PORT: u16 = 2222;
 

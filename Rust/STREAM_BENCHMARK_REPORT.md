@@ -29,7 +29,7 @@ configuration:
 All three met the short-run reliability gate and achieved exactly 1,000.000
 sent commands/s. Native RMII had the lowest typical and p99 RTT. W5500
 offload was the better of the two SPI designs in this run. The 30-second
-result validates implementation and wiring; use the repeatable 15-minute and
+result validates implementation and wiring; use the repeatable one-hour and
 8-hour runs before treating tail values as qualification data.
 
 ## Preliminary reliability knee
@@ -76,7 +76,7 @@ example, MACRAW at 2 kHz recorded 295 missing and 4,488 late events. The CSV
 output preserves that detailed breakdown rather than only the total.
 
 These are preliminary knees from short trials. Confirm with the default
-10-second dwell, repeat the boundary rates, and use a longer soak at the
+30-second dwell, repeat the boundary rates, and use a longer soak at the
 selected operating margin before establishing a requirement or regression
 threshold.
 
@@ -88,29 +88,40 @@ threshold.
 | W5500 MACRAW + Embassy | 255 | 47 | 302 | 66,592 B | 20,992 B |
 | W5500 hardware offload | 236 | 53 | 289 | 25,728 B | 3,124 B |
 
-Static MCU RAM is the release ELF's `.data + .bss + .uninit`; it does not
-measure runtime stack high-water use. The W5500's external 32 KiB packet RAM
-is not counted. CPU utilization is also not claimed from host RTT: accurate
-MCU CPU accounting requires Embassy executor tracing or an external trace
-probe, and adding that instrumentation would define a new benchmark build.
+Static MCU RAM is the release ELF's `.data + .bss + .uninit`; the W5500's
+external 32 KiB packet RAM is not counted. A separate `profiling` firmware
+feature now measures Embassy executor busy cycles and runtime stack
+high-water. This keeps instrumentation overhead out of the baseline numbers
+above while allowing repeatable CPU and memory comparisons.
+
+The profile reports executor task-polling time, not total MCU utilization: it
+does not count interrupt-handler time, DMA, or work offloaded into the W5500.
+Use profiling results comparatively and do not combine them with results from
+an ordinary benchmark image.
 
 ## Reproduction
 
 ```powershell
-# Quick 30-second comparison used for this engineering baseline
+# Quick validation: 30-second stream and 3 seconds per sweep rate
 .\Rust\tools\run-stream-benchmark-comparison.ps1 `
-    -Version 0.4.1 `
+    -Version 0.4.2 `
     -NativeIp 192.168.68.117 `
     -W5500Ip 192.168.68.74 `
     -Quick
 
-# Rate sweep only; defaults to 10 seconds at every 1 kHz step
+# Rate sweep only; defaults to 30 seconds at every 1 kHz step
 .\Rust\tools\udp-benchmark\target\x86_64-pc-windows-msvc\release\udp-benchmark.exe stream-sweep `
-    --board 192.168.68.74
+    --board 192.168.68.74 `
+    --profile
 
-# Source and current release-ELF memory metrics
-.\Rust\tools\measure-variants.ps1 -Benchmark
+# Source and current profiling-image memory metrics
+.\Rust\tools\measure-variants.ps1 -Profiling
 ```
+
+Without `-Quick`, the comparison runner uses a one-hour 1 kHz stream for each
+implementation before its 30-second-per-rate sweep. Raw output includes CPU,
+cycles-per-valid-packet, stack high-water, static RAM, and all network error
+counters.
 
 Addresses are DHCP leases, not firmware constants. Raw JSON/CSV results are
 written below `Rust/benchmark-results/` and intentionally ignored by Git.

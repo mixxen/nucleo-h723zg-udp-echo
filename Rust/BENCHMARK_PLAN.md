@@ -137,7 +137,7 @@ Run one target directly:
 ```powershell
 .\Rust\tools\udp-benchmark\target\x86_64-pc-windows-msvc\release\udp-benchmark.exe stream `
     --board 192.168.68.74 `
-    --duration-seconds 900 `
+    --duration-seconds 3600 `
     --interval-seconds 60 `
     --output-dir .\Rust\benchmark-results\stream
 ```
@@ -150,9 +150,9 @@ Or build, flash, and compare all three variants repeatably:
     -W5500Ip 192.168.68.74
 ```
 
-Use `-Quick` for a 30-second engineering check. The normal 15-minute run is
-the baseline; an 8-hour run is the release soak. DHCP addresses are examples,
-so verify the router leases before running the automated sequence.
+Use `-Quick` for a 30-second engineering check. The normal stream run is one
+hour; an 8-hour run is the release soak. DHCP addresses are examples, so
+verify the router leases before running the automated sequence.
 
 This is a transport surrogate, not a complete mirror-control acceptance
 test: the current board application echoes each command instead of decoding
@@ -162,12 +162,13 @@ future hardware-in-the-loop test must add command-age deadlines and physical
 mirror response.
 
 To find the reliability knee, `stream-sweep` runs 100-byte packets from 1 through
-20 kHz in 1 kHz increments. The default dwell is 10 seconds per rate:
+20 kHz in 1 kHz increments. The default dwell is 30 seconds per rate:
 
 ```powershell
 .\Rust\tools\udp-benchmark\target\x86_64-pc-windows-msvc\release\udp-benchmark.exe stream-sweep `
     --board 192.168.68.74 `
-    --duration-seconds 10 `
+    --duration-seconds 30 `
+    --profile `
     --output-dir .\Rust\benchmark-results\stream-sweep
 ```
 
@@ -179,6 +180,24 @@ without corruption. Error events sum the missing, late, duplicate, reordered,
 corrupt, foreign, and send-error counters. Because those conditions can
 overlap for one packet, the detailed counters remain the authoritative
 breakdown. Requested and achieved rates are both retained.
+
+### Firmware CPU and memory profile
+
+Add `--profile` to `stream` or `stream-sweep` and flash firmware built with
+`-Profiling`. The host resets the board counters immediately before each
+trial and reads them afterward over UDP port 5001. Results contain:
+
+- Embassy executor busy cycles and utilization percentage;
+- executor poll count and busy cycles per valid echoed packet;
+- runtime stack high-water and configured stack capacity; and
+- statically allocated MCU RAM derived from the profiling image layout.
+
+Executor utilization measures task polling with the Cortex-M7 DWT cycle
+counter. It excludes interrupt-handler time, DMA activity, and processing
+offloaded into the W5500, so it is not a claim of total MCU utilization. The
+profiling trace also has small execution and image-size overhead. Always use
+the same profiling feature for comparative runs and keep production builds
+free of this measurement path.
 
 ### 1. Functional gate
 
@@ -373,7 +392,9 @@ Implemented on 2026-08-12:
   highest reliable and first unreliable rates;
 - interrupt-driven W5500 receive on Arduino D2 / PG14 / EXTI14, replacing the
   former 1 ms packet polling; and
-- ELF flash and MCU RAM measurement in `tools/measure-variants.ps1`.
+- ELF flash and MCU RAM measurement in `tools/measure-variants.ps1`; and
+- optional on-board executor CPU and runtime stack high-water telemetry for
+  stream and stream-sweep profiling builds.
 
 The reviewed results and conclusions are in
 [BENCHMARK_REPORT.md](BENCHMARK_REPORT.md). The baseline used every initial

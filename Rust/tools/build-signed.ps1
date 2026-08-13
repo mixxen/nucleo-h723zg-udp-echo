@@ -8,7 +8,8 @@ param(
     [switch]$NativeUdp,
     [switch]$W5500,
     [switch]$W5500Offload,
-    [switch]$Benchmark
+    [switch]$Benchmark,
+    [switch]$Profiling
 )
 
 $ErrorActionPreference = "Stop"
@@ -28,6 +29,9 @@ if (($NativeUdp -or $W5500 -or $W5500Offload) -and $RollbackTest) {
 if ($Benchmark -and -not ($NativeUdp -or $W5500 -or $W5500Offload)) {
     throw "-Benchmark requires -NativeUdp, -W5500, or -W5500Offload."
 }
+if ($Profiling -and -not ($NativeUdp -or $W5500 -or $W5500Offload)) {
+    throw "-Profiling requires -NativeUdp, -W5500, or -W5500Offload."
+}
 
 $binaryName = if ($W5500Offload) {
     "nucleo-h723zg-w5500-offload-udp-echo"
@@ -39,7 +43,9 @@ $binaryName = if ($W5500Offload) {
     "nucleo-h723zg-udp-echo"
 }
 $artifactPrefix = if ($W5500Offload) { "firmware-w5500-offload" } elseif ($W5500) { "firmware-w5500" } elseif ($NativeUdp) { "firmware-native-udp" } else { "firmware" }
-if ($Benchmark) {
+if ($Profiling) {
+    $artifactPrefix += "-profiling"
+} elseif ($Benchmark) {
     $artifactPrefix += "-benchmark"
 }
 $elf = Join-Path $projectRoot "target\thumbv7em-none-eabihf\release\$binaryName"
@@ -59,7 +65,9 @@ try {
     $cargoArguments = @("build", "--locked", "--release")
     if ($NativeUdp -or $W5500 -or $W5500Offload) {
         $feature = if ($W5500Offload) { "wiznet-offload" } elseif ($W5500) { "wiznet" } else { "native-udp" }
-        if ($Benchmark) {
+        if ($Profiling) {
+            $feature += ",profiling"
+        } elseif ($Benchmark) {
             $feature += ",benchmark"
         }
         $cargoArguments += @(

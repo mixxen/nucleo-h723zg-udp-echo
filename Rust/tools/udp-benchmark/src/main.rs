@@ -1,6 +1,7 @@
 //! Reproducible host-side benchmark for the NUCLEO UDP echo firmware.
 
 mod model;
+mod profile;
 mod protocol;
 mod runner;
 mod stats;
@@ -15,7 +16,8 @@ use std::time::{Duration, SystemTime, UNIX_EPOCH};
 
 use clap::{Args, Parser, Subcommand};
 use model::{
-    CapacityResult, Metadata, PacketCounters, StreamSweepPoint, StreamSweepResult, SuiteResult,
+    CapacityResult, Metadata, PacketCounters, StreamResult, StreamSweepPoint, StreamSweepResult,
+    SuiteResult,
 };
 use runner::BenchSocket;
 use serde::Serialize;
@@ -152,13 +154,13 @@ struct SoakArgs {
 struct StreamArgs {
     #[command(flatten)]
     target: TargetArgs,
-    /// Command datagram size, including the benchmark sequence header.
+    /// Stream datagram size, including the benchmark sequence header.
     #[arg(long, default_value_t = 100)]
     payload_bytes: usize,
-    /// Commands sent per second.
+    /// Datagrams sent per second.
     #[arg(long, default_value_t = 1_000.0)]
     rate_hz: f64,
-    #[arg(long, default_value_t = 900)]
+    #[arg(long, default_value_t = 3_600)]
     duration_seconds: u64,
     #[arg(long, default_value_t = 60)]
     interval_seconds: u64,
@@ -172,6 +174,9 @@ struct StreamArgs {
     output_dir: PathBuf,
     #[arg(long, default_value_t = 0x4653_4d07_2300_0001)]
     run_id: u64,
+    /// Query profiling telemetry on UDP port 5001 before and after the trial.
+    #[arg(long)]
+    profile: bool,
 }
 
 #[derive(Args)]
@@ -186,7 +191,7 @@ struct StreamSweepArgs {
         default_value = "1000,2000,3000,4000,5000,6000,7000,8000,9000,10000,11000,12000,13000,14000,15000,16000,17000,18000,19000,20000"
     )]
     rates_hz: String,
-    #[arg(long, default_value_t = 10)]
+    #[arg(long, default_value_t = 30)]
     duration_seconds: u64,
     #[arg(long, default_value_t = 2_000)]
     drain_ms: u64,
@@ -199,6 +204,9 @@ struct StreamSweepArgs {
     output_dir: PathBuf,
     #[arg(long, default_value_t = 0x4653_4d07_2300_1000)]
     run_id: u64,
+    /// Query profiling telemetry on UDP port 5001 around every rate.
+    #[arg(long)]
+    profile: bool,
 }
 
 #[derive(Args)]
@@ -339,7 +347,15 @@ fn run_soak(args: SoakArgs) -> Result<(), Box<dyn Error>> {
 }
 
 fn run_stream(args: StreamArgs) -> Result<(), Box<dyn Error>> {
-    let socket = BenchSocket::connect(target_address(&args.target)?)?;
+    let target = target_address(&args.target)?;
+    let socket = BenchSocket::connect(target)?;
+    let profiler = args
+        .profile
+        .then(|| profile::ProfileClient::connect(target))
+        .transpose()?;
+    if let Some(profiler) = &profiler {
+        profiler.reset()?;
+    }
     let result = socket.fixed_rate(
         args.payload_bytes,
         args.rate_hz,
@@ -350,24 +366,33 @@ fn run_stream(args: StreamArgs) -> Result<(), Box<dyn Error>> {
         args.window,
         args.run_id,
     )?;
+    let profile = profiler
+        .map(|profiler| profiler.snapshot(result.counters.valid_replies))
+        .transpose()?;
+    let stream = StreamResult {
+        payload_bytes: args.payload_bytes,
+        target_hz: args.rate_hz,
+        profile,
+        result,
+    };
     prepare_output(&args.output_dir)?;
-    write_json(args.output_dir.join("stream.json"), &result)?;
-    write_load_csv(args.output_dir.join("stream.csv"), &result.intervals)?;
-    fs::write(
-        args.output_dir.join("summary.md"),
-        stream_markdown(args.payload_bytes, args.rate_hz, &result),
-    )?;
+    write_json(args.output_dir.join("stream.json"), &stream)?;
+    write_load_csv(args.output_dir.join("stream.csv"), &stream.result.intervals)?;
+    fs::write(args.output_dir.join("summary.md"), stream_markdown(&stream))?;
     println!(
         "stream payload={} bytes target={:.3} Hz achieved={:.3} Hz valid={}/{} missing={} late={} p99={:.3} ms",
         args.payload_bytes,
         args.rate_hz,
-        result.counters.sent as f64 / args.duration_seconds as f64,
-        result.counters.valid_replies,
-        result.counters.sent,
-        result.counters.missing,
-        result.counters.late,
-        ns_ms(result.latency.p99_ns),
+        stream.result.counters.sent as f64 / args.duration_seconds as f64,
+        stream.result.counters.valid_replies,
+        stream.result.counters.sent,
+        stream.result.counters.missing,
+        stream.result.counters.late,
+        ns_ms(stream.result.latency.p99_ns),
     );
+    if let Some(profile) = &stream.profile {
+        print_profile(profile);
+    }
     Ok(())
 }
 
@@ -376,10 +401,18 @@ fn run_stream_sweep(args: StreamSweepArgs) -> Result<(), Box<dyn Error>> {
         return Err("duration must be greater than zero".into());
     }
     let rates = parse_float_list(&args.rates_hz)?;
-    let socket = BenchSocket::connect(target_address(&args.target)?)?;
+    let target = target_address(&args.target)?;
+    let socket = BenchSocket::connect(target)?;
+    let profiler = args
+        .profile
+        .then(|| profile::ProfileClient::connect(target))
+        .transpose()?;
     let mut points = Vec::with_capacity(rates.len());
 
     for (index, target_hz) in rates.into_iter().enumerate() {
+        if let Some(profiler) = &profiler {
+            profiler.reset()?;
+        }
         let result = socket.fixed_rate(
             args.payload_bytes,
             target_hz,
@@ -393,6 +426,10 @@ fn run_stream_sweep(args: StreamSweepArgs) -> Result<(), Box<dyn Error>> {
         let achieved_hz = result.counters.sent as f64 / args.duration_seconds as f64;
         let reliable = stream_reliable(&result, target_hz, achieved_hz);
         let error_events = stream_error_events(&result.counters);
+        let profile = profiler
+            .as_ref()
+            .map(|profiler| profiler.snapshot(result.counters.valid_replies))
+            .transpose()?;
         println!(
             "stream sweep target={:.3} kHz achieved={:.3} kHz reliable={} errors={} valid={}/{} missing={} late={} duplicate={} reordered={} corrupt={} foreign={} send_errors={} p99={:.3} ms",
             target_hz / 1_000.0,
@@ -415,6 +452,7 @@ fn run_stream_sweep(args: StreamSweepArgs) -> Result<(), Box<dyn Error>> {
             achieved_hz,
             reliable,
             error_events,
+            profile,
             result,
         });
     }
@@ -741,14 +779,14 @@ fn write_stream_sweep_csv(path: PathBuf, sweep: &StreamSweepResult) -> io_result
     let mut output = BufWriter::new(File::create(path)?);
     writeln!(
         output,
-        "target_hz,achieved_hz,reliable,error_events,sent,valid,missing,late,duplicates,reordered,corrupt,foreign,send_errors,p50_ns,p99_ns,max_ns"
+        "target_hz,achieved_hz,reliable,error_events,sent,valid,missing,late,duplicates,reordered,corrupt,foreign,send_errors,p50_ns,p99_ns,max_ns,executor_cpu_percent,cycles_per_valid_packet,executor_polls,stack_high_water_bytes,stack_capacity_bytes,static_ram_bytes"
     )?;
     for point in &sweep.points {
         let counters = &point.result.counters;
         let latency = &point.result.latency;
         writeln!(
             output,
-            "{:.3},{:.3},{},{},{},{},{},{},{},{},{},{},{},{},{},{}",
+            "{:.3},{:.3},{},{},{},{},{},{},{},{},{},{},{},{},{},{},{},{},{},{},{},{}",
             point.target_hz,
             point.achieved_hz,
             point.reliable,
@@ -765,6 +803,42 @@ fn write_stream_sweep_csv(path: PathBuf, sweep: &StreamSweepResult) -> io_result
             latency.p50_ns,
             latency.p99_ns,
             latency.max_ns,
+            csv_option(
+                point
+                    .profile
+                    .as_ref()
+                    .map(|value| value.executor_cpu_percent)
+            ),
+            csv_option(
+                point
+                    .profile
+                    .as_ref()
+                    .map(|value| value.cycles_per_valid_packet)
+            ),
+            csv_option(
+                point
+                    .profile
+                    .as_ref()
+                    .map(|value| value.executor_polls as f64)
+            ),
+            csv_option(
+                point
+                    .profile
+                    .as_ref()
+                    .map(|value| value.stack_high_water_bytes as f64)
+            ),
+            csv_option(
+                point
+                    .profile
+                    .as_ref()
+                    .map(|value| value.stack_capacity_bytes as f64)
+            ),
+            csv_option(
+                point
+                    .profile
+                    .as_ref()
+                    .map(|value| value.static_ram_bytes as f64)
+            ),
         )?;
     }
     Ok(())
@@ -935,10 +1009,11 @@ fn counters_markdown(counters: &PacketCounters) -> String {
     )
 }
 
-fn stream_markdown(payload_bytes: usize, rate_hz: f64, result: &model::SoakResult) -> String {
-    format!(
+fn stream_markdown(stream: &StreamResult) -> String {
+    let result = &stream.result;
+    let mut output = format!(
         "# Stream benchmark\n\n- Payload: {payload_bytes} bytes\n- Target: {rate_hz:.3} datagrams/s ({:.3} Mbit/s one way)\n- Duration: {} seconds\n- Sent: {}\n- Valid replies: {}\n- Missing: {}\n- Late: {}\n- Duplicate: {}\n- Reordered: {}\n- Corrupt: {}\n- RTT p50: {:.3} ms\n- RTT p99: {:.3} ms\n- RTT max: {:.3} ms\n",
-        payload_bytes as f64 * rate_hz * 8.0 / 1_000_000.0,
+        stream.payload_bytes as f64 * stream.target_hz * 8.0 / 1_000_000.0,
         result.duration_seconds,
         result.counters.sent,
         result.counters.valid_replies,
@@ -950,7 +1025,13 @@ fn stream_markdown(payload_bytes: usize, rate_hz: f64, result: &model::SoakResul
         ns_ms(result.latency.p50_ns),
         ns_ms(result.latency.p99_ns),
         ns_ms(result.latency.max_ns),
-    )
+        payload_bytes = stream.payload_bytes,
+        rate_hz = stream.target_hz,
+    );
+    if let Some(profile) = &stream.profile {
+        output.push_str(&profile_markdown(profile));
+    }
+    output
 }
 
 fn stream_reliable(result: &model::SoakResult, target_hz: f64, achieved_hz: f64) -> bool {
@@ -979,7 +1060,7 @@ fn stream_error_events(counters: &PacketCounters) -> u64 {
 
 fn stream_sweep_markdown(sweep: &StreamSweepResult) -> String {
     let mut output = format!(
-        "# Stream rate sweep\n\n- Payload: {} bytes\n- Duration per rate: {} seconds\n- Reliable range: 1 kHz -> {}\n- First unreliable rate: {}\n\n| Target kHz | Achieved kHz | Reliable | Error events | Valid / sent | Missing | Late | Duplicate | Reordered | Corrupt | Foreign | Send errors | p50 ms | p99 ms | Max ms |\n|---:|---:|:---:|---:|---:|---:|---:|---:|---:|---:|---:|---:|---:|---:|---:|\n",
+        "# Stream rate sweep\n\n- Payload: {} bytes\n- Duration per rate: {} seconds\n- Reliable range: 1 kHz -> {}\n- First unreliable rate: {}\n\n| Target kHz | Achieved kHz | Reliable | Errors | CPU % | Cycles/valid | Stack high-water | Valid / sent | Missing | Late | p99 ms |\n|---:|---:|:---:|---:|---:|---:|---:|---:|---:|---:|---:|\n",
         sweep.payload_bytes,
         sweep.duration_seconds_per_rate,
         format_rate(sweep.highest_reliable_hz),
@@ -989,27 +1070,71 @@ fn stream_sweep_markdown(sweep: &StreamSweepResult) -> String {
         let counters = &point.result.counters;
         let latency = &point.result.latency;
         output.push_str(&format!(
-            "| {:.3} | {:.3} | {} | {} | {} / {} | {} | {} | {} | {} | {} | {} | {} | {:.3} | {:.3} | {:.3} |\n",
+            "| {:.3} | {:.3} | {} | {} | {} | {} | {} | {} / {} | {} | {} | {:.3} |\n",
             point.target_hz / 1_000.0,
             point.achieved_hz / 1_000.0,
             if point.reliable { "yes" } else { "no" },
             point.error_events,
+            display_option(
+                point
+                    .profile
+                    .as_ref()
+                    .map(|value| value.executor_cpu_percent)
+            ),
+            display_option(
+                point
+                    .profile
+                    .as_ref()
+                    .map(|value| value.cycles_per_valid_packet)
+            ),
+            point
+                .profile
+                .as_ref()
+                .map(|value| format!("{} B", value.stack_high_water_bytes))
+                .unwrap_or_else(|| "n/a".to_owned()),
             counters.valid_replies,
             counters.sent,
             counters.missing,
             counters.late,
-            counters.duplicates,
-            counters.reordered,
-            counters.corrupt,
-            counters.foreign,
-            counters.send_errors,
-            ns_ms(latency.p50_ns),
             ns_ms(latency.p99_ns),
-            ns_ms(latency.max_ns),
         ));
     }
     output.push_str("\nA point is reliable only when at least 98% of the requested rate is offered and every planned packet is sent and returned exactly once, in order, on time, and uncorrupted. Error events are the sum of missing, late, duplicate, reordered, corrupt, foreign, and send-error counters; one packet can contribute more than one event.\n");
     output
+}
+
+fn print_profile(profile: &model::ProfileMetrics) {
+    println!(
+        "profile executor_cpu={:.3}% cycles/valid={:.1} polls={} stack_high_water={} B static_ram={} B",
+        profile.executor_cpu_percent,
+        profile.cycles_per_valid_packet,
+        profile.executor_polls,
+        profile.stack_high_water_bytes,
+        profile.static_ram_bytes,
+    );
+}
+
+fn profile_markdown(profile: &model::ProfileMetrics) -> String {
+    format!(
+        "\n## MCU profile\n\n- Executor CPU: {:.3}%\n- Busy cycles: {}\n- Cycles per valid packet: {:.1}\n- Executor polls: {}\n- Stack high-water: {} / {} bytes\n- Static RAM: {} bytes\n",
+        profile.executor_cpu_percent,
+        profile.busy_cycles,
+        profile.cycles_per_valid_packet,
+        profile.executor_polls,
+        profile.stack_high_water_bytes,
+        profile.stack_capacity_bytes,
+        profile.static_ram_bytes,
+    )
+}
+
+fn csv_option(value: Option<f64>) -> String {
+    value.map(|value| format!("{value:.6}")).unwrap_or_default()
+}
+
+fn display_option(value: Option<f64>) -> String {
+    value
+        .map(|value| format!("{value:.3}"))
+        .unwrap_or_else(|| "n/a".to_owned())
 }
 
 fn format_rate(rate_hz: Option<f64>) -> String {

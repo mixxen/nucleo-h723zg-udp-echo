@@ -16,6 +16,15 @@ The source boundaries and repeatable SLOC comparison for native RMII, W5500
 MACRAW, and W5500 hardware-offload firmware are documented in
 [Rust/TRADE_STUDY.md](Rust/TRADE_STUDY.md).
 
+The repeatable 100-byte stream benchmark, including 1 kHz reliability,
+1–20 kHz saturation sweeps, Embassy executor CPU, and runtime stack
+high-water measurement, is documented in
+[Rust/STREAM_BENCHMARK_REPORT.md](Rust/STREAM_BENCHMARK_REPORT.md). The normal
+comparison runs each 1 kHz stream for one hour; `-Quick` provides a short
+engineering check.
+The reviewed one-hour profiled results are in
+[Rust/PROFILED_STREAM_BENCHMARK_REPORT.md](Rust/PROFILED_STREAM_BENCHMARK_REPORT.md).
+
 The implementation plan and live progress ledger for signed, rollback-safe
 Ethernet updates is in
 [ETHERNET_FIRMWARE_UPDATE_PLAN.md](ETHERNET_FIRMWARE_UPDATE_PLAN.md).

@@ -506,6 +506,7 @@ by an unknown key. Detailed evidence remains in
 - `tools/provision_ssh.ps1`: persistent host and authorized-client key setup
 - `tools/udp_echo_test.ps1`: host-side binary UDP acceptance test
 - `tools/measure-variants.ps1`: repeatable bring-up/server NCLOC and image sizes
+- `src/profiling.rs`: benchmark-only executor CPU and stack high-water telemetry
 
 See [TRADE_STUDY.md](TRADE_STUDY.md) for the controlled comparison among
 native RMII, W5500 MACRAW, and W5500 hardware-offload UDP firmware.
@@ -515,6 +516,8 @@ The completed native-RMII, W5500-MACRAW, and W5500-offload comparison is in
 [BENCHMARK_REPORT.md](BENCHMARK_REPORT.md).
 The 100-byte, 1 kHz mirror-command results are in
 [STREAM_BENCHMARK_REPORT.md](STREAM_BENCHMARK_REPORT.md).
+The newer one-hour run with MCU CPU and stack instrumentation is in
+[PROFILED_STREAM_BENCHMARK_REPORT.md](PROFILED_STREAM_BENCHMARK_REPORT.md).
 
 Run the short end-to-end validation profile from the repository root with:
 
@@ -539,24 +542,36 @@ current DHCP leases and run:
     -Quick
 ```
 
-Remove `-Quick` for the normal 15-minute run. The tool sends exactly 100-byte
+Remove `-Quick` for the normal one-hour run. The tool sends exactly 100-byte
 datagrams at 1,000 Hz and records every missing, late, duplicate, reordered,
 or corrupt reply plus RTT percentiles. W5500 packet reception is now driven by
 its active-low INTn signal through shield D2 to NUCLEO PG14/EXTI14. A one-second
 timer remains only for DHCP/link maintenance and missed-interrupt recovery;
 it is not the normal packet path.
 
-The same runner now follows the 1 kHz soak with a rate sweep from 1 through
-20 kHz in 1 kHz increments. Its final table includes `HighestReliableKHz` and
-`FirstUnreliableKHz`; `rate-comparison.csv` contains the total error events and
-detailed error counters at every increment for every architecture. To run
-only the sweep against the currently flashed image:
+The runner flashes a separate profiling build and follows the one-hour 1 kHz
+stream with a rate sweep from 1 through 20 kHz in 1 kHz increments, dwelling
+30 seconds at each rate. Its output includes executor CPU percentage, cycles
+per valid packet, static MCU RAM, and runtime stack high-water in addition to
+`HighestReliableKHz`, `FirstUnreliableKHz`, and detailed error counts. To run
+only the sweep against a currently flashed profiling image:
 
 ```powershell
 .\Rust\tools\udp-benchmark\target\x86_64-pc-windows-msvc\release\udp-benchmark.exe stream-sweep `
     --board 192.168.68.74 `
-    --duration-seconds 10
+    --duration-seconds 30 `
+    --profile
 ```
 
 The tool records achieved rate separately so host pacing limits are not
-misreported as board packet loss.
+misreported as board packet loss. `-Quick` keeps development feedback short:
+30 seconds for the 1 kHz stream and 3 seconds at each sweep rate.
+
+The CPU figure is the percentage of wall-clock CPU cycles spent polling
+Embassy executor tasks. It deliberately excludes interrupt-handler time, DMA,
+and work performed inside the W5500, so read it as *executor utilization*, not
+total MCU utilization. The trace callbacks add overhead, which is why normal
+and `benchmark` firmware remain unchanged and performance comparisons use the
+same `profiling` feature on all three variants. Stack high-water is measured by
+painting unused stack at reset and scanning it after the trial; static RAM is
+derived from the same profiling firmware's linker boundaries.
