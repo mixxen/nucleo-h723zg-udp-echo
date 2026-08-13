@@ -279,9 +279,13 @@ tail values as qualification data.
 ## Preliminary reliability knee
 
 A 3-second-per-rate engineering sweep tested the 100-byte command stream from
-1 through 20 kHz in 1 kHz increments. "Reliable" requires at least 98%
+1 through 30 kHz in 1 kHz increments. "Reliable" requires at least 98%
 achieved offered rate and zero missing, late (50 ms timeout), duplicate,
 reordered, corrupt, foreign, or send-error packets.
+
+The reliability label also requires the host to send every planned packet.
+Consequently, zero error events with `reliable=false` means the applied host
+load was incomplete; it does not by itself indicate a board-side failure.
 
 | Variant | Reliable range | First unreliable | First-failure evidence |
 |---|---:|---:|---|
@@ -289,7 +293,7 @@ reordered, corrupt, foreign, or send-error packets.
 | Native RMII + Embassy | 1 through 7 kHz | 8 kHz | 21,462 / 24,000 valid; 2,538 error events |
 | Native RMII performance + full checksum offload | 1 through 11 kHz | 12 kHz | Host sent 35,999 / 36,000 planned; all sent packets valid |
 | W5500 MACRAW + Embassy | 1 kHz only | 2 kHz | 5,705 / 6,000 valid; 4,783 error events |
-| Optimized W5500 MACRAW | 1 through 9 kHz | 10 kHz | 29,657 / 30,000 valid; 343 missing |
+| Optimized W5500 MACRAW | 1 through 9 kHz | 10 kHz | 29,634 / 30,000 valid; 366 missing |
 | W5500 hardware offload, fresh control | 1 through 7 kHz | 8 kHz | 21,104 / 24,000 valid; 2,896 missing |
 | Optimized W5500 hardware offload, 40 MHz SPI + D-cache | 1 through 15 kHz | 16 kHz | 46,269 / 48,000 valid; 1,731 missing |
 
@@ -306,17 +310,27 @@ reordered, corrupt, foreign, or send-error packets.
 | 7 | 0 | 0 | 0 | 0 | 0 | 20,883 | 0 |
 | 8 | 0 | 2,538 | 0 | 2,896 | 0 | 23,888 | 0 |
 | 9 | 0 | 6,969 | 0 | 5,894 | 0 | 26,892 | 0 |
-| 10 | 0 | 9,839 | 0 | 8,893 | 0 | 29,896 | 343 |
-| 11 | 0 | 15,042 | 0 | 11,897 | 0 | 32,896 | 1,077 |
-| 12 | 0 | 19,380 | 0 | 14,896 | 0 | 35,898 | 4,093 |
-| 13 | 0 | 23,235 | 1 | 17,897 | 0 | 38,900 | 7,079 |
-| 14 | 0 | 27,334 | 0 | 20,898 | 0 | 41,900 | 10,100 |
-| 15 | 0 | 31,350 | 0 | 23,898 | 0 | 44,903 | 13,116 |
-| 16 | 1 | 35,565 | 2 | 26,897 | 1,731 | 47,904 | 16,086 |
-| 17 | 0 | 39,568 | 1 | 29,896 | 4,747 | 50,904 | 19,096 |
-| 18 | 23 | 43,800 | 2 | 32,895 | 7,736 | 53,904 | 22,105 |
-| 19 | 0 | 47,876 | 2 | 35,894 | 10,731 | 56,904 | 25,106 |
-| 20 | 0 | 52,088 | 0 | 38,898 | 13,739 | 59,904 | 28,096 |
+| 10 | 0 | 9,839 | 0 | 8,893 | 0 | 29,896 | 366 |
+| 11 | 0 | 15,042 | 0 | 11,897 | 0 | 32,896 | 1,078 |
+| 12 | 0 | 19,380 | 0 | 14,896 | 0 | 35,898 | 4,109 |
+| 13 | 0 | 23,235 | 1 | 17,897 | 0 | 38,900 | 7,085 |
+| 14 | 0 | 27,334 | 0 | 20,898 | 0 | 41,900 | 10,106 |
+| 15 | 0 | 31,350 | 0 | 23,898 | 0 | 44,903 | 13,104 |
+| 16 | 1 | 35,565 | 2 | 26,897 | 1,731 | 47,904 | 16,073 |
+| 17 | 0 | 39,568 | 1 | 29,896 | 4,747 | 50,904 | 19,090 |
+| 18 | 23 | 43,800 | 2 | 32,895 | 7,736 | 53,904 | 22,094 |
+| 19 | 0 | 47,876 | 2 | 35,894 | 10,731 | 56,904 | 25,100 |
+| 20 | 0 | 52,088 | 0 | 38,898 | 13,739 | 59,904 | 28,081 |
+| 21 | — | 60,344 | 4 | 46,848 | 16,713 | 62,920 | 31,122 |
+| 22 | — | 63,868 | 21 | 48,791 | 19,724 | 65,924 | 34,107 |
+| 23 | — | 67,412 | 27 | 51,791 | 22,724 | 68,924 | 37,068 |
+| 24 | — | 70,920 | 80 | 54,802 | 25,728 | 71,924 | 40,090 |
+| 25 | — | 74,452 | 68 | 57,877 | 28,729 | 74,924 | 43,096 |
+| 26 | — | 78,000 | 2 | 60,875 | 31,728 | 77,924 | 46,067 |
+| 27 | — | 81,000 | 105 | 63,876 | 34,719 | 80,924 | 49,054 |
+| 28 | — | 84,000 | 3 | 66,868 | 37,730 | 83,924 | 52,052 |
+| 29 | — | 87,000 | 202 | 69,873 | 40,727 | 86,924 | 55,047 |
+| 30 | — | 90,000 | 287 | 72,872 | 43,722 | 89,924 | 58,039 |
 
 An error event is one missing, late, duplicate, reordered, corrupt, foreign,
 or send-error observation. A packet can contribute more than one event; for
@@ -326,6 +340,11 @@ The optimized Rust run has zero error events at 12 kHz because every packet
 actually sent was returned correctly, but it is still marked unreliable in
 the preceding table: the Windows host sent 35,999 of 36,000 planned packets
 and therefore did not achieve the exact requested offered load.
+The C/LwIP image did not answer after it was reflashed for the 21-30 kHz
+continuation, so those cells are left unmeasured instead of treating the testbed
+problem as packet loss. The W5500 offload continuation used the current code
+rebuilt with the control's 20 MHz SPI request; it is useful context but is not a
+bit-for-bit rerun of the earlier control firmware.
 The optimized W5500 column is the retained dedicated-40-MHz SPI plus D-cache
 run. Its 1-15 kHz points were all zero-error, and a separate 30-second 15 kHz
 dwell also returned all 450,000 packets.

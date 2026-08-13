@@ -43,7 +43,7 @@ enum Commands {
     Soak(SoakArgs),
     /// Run a repeatable fixed-size, fixed-rate datagram stream.
     Stream(StreamArgs),
-    /// Sweep the stream rate from 1 through 20 kHz.
+    /// Sweep the stream rate from 1 through 30 kHz.
     StreamSweep(StreamSweepArgs),
     /// Run the functional, latency, throughput, burst, and soak phases.
     Suite(SuiteArgs),
@@ -188,7 +188,7 @@ struct StreamSweepArgs {
     /// Comma-separated command rates in Hz.
     #[arg(
         long,
-        default_value = "1000,2000,3000,4000,5000,6000,7000,8000,9000,10000,11000,12000,13000,14000,15000,16000,17000,18000,19000,20000"
+        default_value = "1000,2000,3000,4000,5000,6000,7000,8000,9000,10000,11000,12000,13000,14000,15000,16000,17000,18000,19000,20000,21000,22000,23000,24000,25000,26000,27000,28000,29000,30000"
     )]
     rates_hz: String,
     #[arg(long, default_value_t = 30)]

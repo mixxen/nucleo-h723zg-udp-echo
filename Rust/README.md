@@ -621,7 +621,7 @@ timer remains only for DHCP/link maintenance and missed-interrupt recovery;
 it is not the normal packet path.
 
 The runner flashes a separate profiling build and follows the one-hour 1 kHz
-stream with a rate sweep from 1 through 20 kHz in 1 kHz increments, dwelling
+stream with a rate sweep from 1 through 30 kHz in 1 kHz increments, dwelling
 30 seconds at each rate. Its output includes executor CPU percentage, cycles
 per valid packet, static MCU RAM, and runtime stack high-water in addition to
 `HighestReliableKHz`, `FirstUnreliableKHz`, and detailed error counts. To run

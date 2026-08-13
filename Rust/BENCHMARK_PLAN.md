@@ -170,7 +170,7 @@ future hardware-in-the-loop test must add command-age deadlines and physical
 mirror response.
 
 To find the reliability knee, `stream-sweep` runs 100-byte packets from 1 through
-20 kHz in 1 kHz increments. The default dwell is 30 seconds per rate:
+30 kHz in 1 kHz increments. The default dwell is 30 seconds per rate:
 
 ```powershell
 .\Rust\tools\udp-benchmark\target\x86_64-pc-windows-msvc\release\udp-benchmark.exe stream-sweep `
@@ -396,7 +396,7 @@ Implemented on 2026-08-12:
   `tools/run-benchmark-comparison.ps1`; and
 - one controlled full baseline covering all three variants.
 - an exact 100-byte/1,000 Hz stream workload and repeatable four-image runner;
-- a 1 kHz-step command-rate sweep from 1 through 20 kHz that records the
+- a 1 kHz-step command-rate sweep from 1 through 30 kHz that records the
   highest reliable and first unreliable rates;
 - interrupt-driven W5500 receive on Arduino D2 / PG14 / EXTI14, replacing the
   former 1 ms packet polling; and
