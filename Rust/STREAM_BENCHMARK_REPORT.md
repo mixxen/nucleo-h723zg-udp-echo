@@ -35,7 +35,7 @@ C-versus-Rust interpretation:
 | UDP application buffers | LwIP pbufs; 14 KiB LwIP heap | 4 RX + 4 TX slots with 6,144-byte RX/TX storage; 1,536-byte work buffer | Same Embassy UDP buffers as native Rust | 1,536-byte MCU work buffer; W5500 socket RX/TX memory |
 | DHCP fallback | After more than 4 attempts: `192.168.0.10/24` | After 30 s: `192.168.0.10/24` | After 30 s: `192.168.0.10/24` | No static fallback |
 | Release optimization | GCC `-O2` | Rust `opt-level="z"` normally; `3` for `performance`; fat LTO | Rust `opt-level="z"`, fat LTO | Rust `opt-level="z"` normally; `3` for `performance`; fat LTO |
-| Cortex-M7 cache policy | I-cache + D-cache; DMA memory made non-cacheable by MPU | I-cache; D-cache off for DMA coherency | I-cache; D-cache off; current SPI path is CPU-driven | I-cache; D-cache off; current SPI path is CPU-driven |
+| Cortex-M7 cache policy | I-cache + D-cache; DMA memory made non-cacheable by MPU | I-cache; D-cache off for DMA coherency | I-cache; D-cache off | I-cache normally; I-cache + D-cache with `performance` because the SPI path is CPU-driven |
 | Success-path logging during benchmark | None | Disabled | Disabled | Disabled |
 | Firmware CPU/stack telemetry | Not implemented | Optional profiling feature | Optional profiling feature | Optional profiling feature |
 
@@ -159,7 +159,7 @@ variable-data-length SPI mode was already provided by `w5500-ll`. The old EVB
 example itself uses only a 10 MHz blocking SPI implementation, so it is an API
 reference rather than a modern DMA performance baseline.
 
-Four changes were retained:
+Five changes were retained:
 
 1. the ordinary offload build requests a 50 MHz SPI clock instead of 20 MHz;
 2. a separate offload `performance` build uses `opt-level=3` and the same
@@ -169,7 +169,9 @@ Four changes were retained:
    and
 4. performance-mode SPI1 uses an independent 80 MHz PLL2-P kernel clock and
    its /2 divider, preserving the 520 MHz CPU while raising SPI from about
-   32.5 MHz to a board-validated 40 MHz.
+   32.5 MHz to a board-validated 40 MHz; and
+5. D-cache is enabled only for performance-mode W5500 firmware, whose blocking
+   SPI path has no DMA coherency hazard.
 
 | Offload stage | MCU | Effective SPI | Strict zero-error sweep | Saturation plateau | 1 kHz p50 / p99 |
 |---|---:|---:|---:|---:|---:|
@@ -177,17 +179,26 @@ Four changes were retained:
 | SPI clock only | 400 MHz, size (`z`) | 50 MHz | 1-7 kHz | 7,554 valid/s | 0.288 / 0.977 ms |
 | Performance clock/compiler | 520 MHz, speed (`3`) | approximately 32.5 MHz | 1-11 kHz | 11,561 valid/s | 0.234 / 0.403 ms |
 | Performance + cached peer | 520 MHz, speed (`3`) | approximately 32.5 MHz | 1-12 kHz on repeat sweep | 12,117 valid/s | 0.231 / 0.435 ms |
-| **Retained dedicated SPI clock** | **520 MHz, speed (`3`)** | **40 MHz** | **1-14 kHz** | **about 14,242 valid/s** | **not rerun at 1 kHz** |
+| Dedicated SPI clock | 520 MHz, speed (`3`) | 40 MHz | 1-14 kHz | about 14,242 valid/s | not rerun at 1 kHz |
+| **Retained W5500 D-cache** | **520 MHz, speed (`3`) + I/D-cache** | **40 MHz** | **1-15 kHz** | **about 15,421 valid/s** | **not rerun at 1 kHz** |
 
-The final plateau is about 103% above the fresh control. The preceding
+The final plateau is about 119% above the fresh control. The preceding
 cached-peer stage's first full sweep had four missing packets at 5 kHz but
 was clean from 6 through 12 kHz; a repeated 1-12 kHz sweep and a separate
 50,000-packet 5 kHz run were entirely clean.
 A 30-second 12 kHz trial on the 32.5 MHz stage returned 359,870/360,000
 packets (0.036% loss). The retained 40 MHz build subsequently returned all
 420,000/420,000 packets during a 30-second 14 kHz boundary dwell, making
-14 kHz the new measured sustained point. All earlier 1 kHz trials returned
+14 kHz the measured sustained point for that stage. Enabling D-cache then
+returned all 450,000/450,000 packets during a 30-second 15 kHz dwell, making
+15 kHz the new measured sustained point. All earlier 1 kHz trials returned
 30,000/30,000.
+
+The live Cortex-M7 cache-control register was `CCR=0x00070210`, confirming
+that both I-cache and D-cache were enabled in the retained image. The cache
+change is deliberately gated by both the W5500/SPI and `performance` choices;
+native RMII retains I-cache only because its Ethernet DMA buffers are not
+cache-maintained.
 
 An attempted 520 MHz build put SPI1 near 65 MHz. It obtained no DHCP lease and
 answered neither UDP nor ARP through the stacked shield headers, despite that
@@ -245,7 +256,7 @@ reordered, corrupt, foreign, or send-error packets.
 | Native RMII performance + full checksum offload | 1 through 11 kHz | 12 kHz | Host sent 35,999 / 36,000 planned; all sent packets valid |
 | W5500 MACRAW + Embassy | 1 kHz only | 2 kHz | 5,705 / 6,000 valid; 4,783 error events |
 | W5500 hardware offload, fresh control | 1 through 7 kHz | 8 kHz | 21,104 / 24,000 valid; 2,896 missing |
-| Optimized W5500 hardware offload, dedicated 40 MHz SPI | 1 through 14 kHz | 15 kHz | 42,705 / 45,000 valid; 2,295 missing |
+| Optimized W5500 hardware offload, 40 MHz SPI + D-cache | 1 through 15 kHz | 16 kHz | 46,269 / 48,000 valid; 1,731 missing |
 
 ### Error events at each increment
 
@@ -265,12 +276,12 @@ reordered, corrupt, foreign, or send-error packets.
 | 12 | 0 | 19,380 | 0 | 14,896 | 0 | 35,898 |
 | 13 | 0 | 23,235 | 1 | 17,897 | 0 | 38,900 |
 | 14 | 0 | 27,334 | 0 | 20,898 | 0 | 41,900 |
-| 15 | 0 | 31,350 | 0 | 23,898 | 2,295 | 44,903 |
-| 16 | 1 | 35,565 | 2 | 26,897 | 5,279 | 47,904 |
-| 17 | 0 | 39,568 | 1 | 29,896 | 8,265 | 50,904 |
-| 18 | 23 | 43,800 | 2 | 32,895 | 11,284 | 53,904 |
-| 19 | 0 | 47,876 | 2 | 35,894 | 14,268 | 56,904 |
-| 20 | 0 | 52,088 | 0 | 38,898 | 17,274 | 59,904 |
+| 15 | 0 | 31,350 | 0 | 23,898 | 0 | 44,903 |
+| 16 | 1 | 35,565 | 2 | 26,897 | 1,731 | 47,904 |
+| 17 | 0 | 39,568 | 1 | 29,896 | 4,747 | 50,904 |
+| 18 | 23 | 43,800 | 2 | 32,895 | 7,736 | 53,904 |
+| 19 | 0 | 47,876 | 2 | 35,894 | 10,731 | 56,904 |
+| 20 | 0 | 52,088 | 0 | 38,898 | 13,739 | 59,904 |
 
 An error event is one missing, late, duplicate, reordered, corrupt, foreign,
 or send-error observation. A packet can contribute more than one event; for
@@ -280,9 +291,9 @@ The optimized Rust run has zero error events at 12 kHz because every packet
 actually sent was returned correctly, but it is still marked unreliable in
 the preceding table: the Windows host sent 35,999 of 36,000 planned packets
 and therefore did not achieve the exact requested offered load.
-The optimized W5500 column is the retained dedicated-40-MHz SPI run. Its
-1-14 kHz points were all zero-error, and a separate 30-second 14 kHz dwell
-also returned all 420,000 packets.
+The optimized W5500 column is the retained dedicated-40-MHz SPI plus D-cache
+run. Its 1-15 kHz points were all zero-error, and a separate 30-second 15 kHz
+dwell also returned all 450,000 packets.
 
 These are preliminary knees from short trials. Confirm with the default
 30-second dwell, repeat the boundary rates, and use a longer soak at the

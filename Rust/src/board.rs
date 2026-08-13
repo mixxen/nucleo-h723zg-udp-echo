@@ -14,10 +14,9 @@ use embassy_stm32::{Config, Peripherals};
 /// remains at 400/200 MHz CPU/AHB.
 pub fn init(needs_spi1_clock: bool) -> Peripherals {
     let mut config = Config::default();
+    let performance_clock = cfg!(feature = "performance");
     {
         use embassy_stm32::rcc::*;
-
-        let performance_clock = cfg!(feature = "performance");
 
         config.rcc.hsi = Some(HSIPrescaler::Div1);
         config.rcc.csi = true;
@@ -76,11 +75,18 @@ pub fn init(needs_spi1_clock: bool) -> Peripherals {
     // every instruction directly from flash is needlessly expensive in the
     // packet-processing hot path, so match the STM32Cube C startup here.
     //
-    // Do not also enable the data cache: Ethernet DMA reads and writes the
-    // packet buffers behind the CPU's back, and this Embassy driver version
-    // does not perform the cache maintenance needed to keep them coherent.
     let mut core = unsafe { cortex_m::Peripherals::steal() };
     core.SCB.enable_icache();
+
+    // The performance W5500-offload path moves every SPI byte through the
+    // CPU; it has no Ethernet or SPI DMA engine accessing cached buffers
+    // behind Rust's back. D-cache is therefore coherent for this variant and
+    // avoids repeatedly fetching stack, socket, and payload data from SRAM.
+    // Keep it disabled for native RMII because that MAC does use DMA and its
+    // packet buffers do not yet have cache maintenance or an MPU exception.
+    if cfg!(feature = "wiznet-offload") && performance_clock {
+        core.SCB.enable_dcache(&mut core.CPUID);
+    }
 
     // MCUboot chain-loads with PRIMASK set. Embassy has now installed the
     // application's clocks, timer, vector table, and interrupt handlers.

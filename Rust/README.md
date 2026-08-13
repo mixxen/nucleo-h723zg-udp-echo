@@ -601,6 +601,8 @@ The W5500 hardwired-socket application has an equivalent performance build:
 That image uses the same MCU/AHB clock and compiler optimization, while an
 independent PLL2-P kernel clocks SPI1 at a board-validated 40 MHz. A 50 MHz
 combined-clock trial did not acquire DHCP through the stacked shield headers.
+The performance build also enables D-cache because this blocking SPI path is
+CPU-driven; native RMII keeps D-cache off to preserve DMA coherency.
 Results are in
 [STREAM_BENCHMARK_REPORT.md](STREAM_BENCHMARK_REPORT.md#w5500-hardware-offload-optimization).
 
