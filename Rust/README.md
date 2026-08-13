@@ -509,3 +509,20 @@ by an unknown key. Detailed evidence remains in
 
 See [TRADE_STUDY.md](TRADE_STUDY.md) for the controlled comparison among
 native RMII, W5500 MACRAW, and W5500 hardware-offload UDP firmware.
+The repeatable latency, bandwidth, and reliability methodology is specified
+in [BENCHMARK_PLAN.md](BENCHMARK_PLAN.md).
+The completed native-RMII, W5500-MACRAW, and W5500-offload comparison is in
+[BENCHMARK_REPORT.md](BENCHMARK_REPORT.md).
+
+Run the short end-to-end validation profile from the repository root with:
+
+```powershell
+.\Rust\tools\run-benchmark-comparison.ps1 `
+    -Version 0.4.0 `
+    -SkipFirmwareBuild `
+    -Quick
+```
+
+Omit `-Quick` for the full 10,000-sample, 100-burst-repetition, 15-minute-soak
+baseline. The runner flashes each benchmark image in turn; it does not run
+both Ethernet interfaces concurrently.

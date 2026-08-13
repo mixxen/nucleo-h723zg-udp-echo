@@ -44,6 +44,7 @@ pub async fn run(stack: Stack<'static>) -> ! {
     unwrap!(socket.bind(UDP_ECHO_PORT));
 
     info!("UDP echo server listening on port {}", UDP_ECHO_PORT);
+    #[cfg(not(feature = "benchmark"))]
     let mut echoed = 0u32;
 
     loop {
@@ -71,9 +72,15 @@ pub async fn run(stack: Stack<'static>) -> ! {
             continue;
         }
 
-        // Wrapping arithmetic avoids a panic after 2^32 successful packets;
-        // this diagnostic counter simply rolls back to zero.
-        echoed = echoed.wrapping_add(1);
-        info!("echoed {} bytes to {:?}; total={}", length, remote, echoed);
+        // Successful packet logs are useful in the tutorial build but would
+        // distort a throughput benchmark and can fill an unattached RTT
+        // buffer. Startup and error logs remain enabled in both modes.
+        #[cfg(not(feature = "benchmark"))]
+        {
+            // Wrapping arithmetic avoids a panic after 2^32 successful
+            // packets; this diagnostic counter simply rolls back to zero.
+            echoed = echoed.wrapping_add(1);
+            info!("echoed {} bytes to {:?}; total={}", length, remote, echoed);
+        }
     }
 }

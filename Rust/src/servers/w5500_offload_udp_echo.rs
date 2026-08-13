@@ -3,7 +3,9 @@
 //! Hardware setup, DHCP, LEDs, and socket binding deliberately live outside
 //! this file. Its SLOC is therefore the offload server metric.
 
-use defmt::{info, unwrap, warn};
+#[cfg(not(feature = "benchmark"))]
+use defmt::info;
+use defmt::{unwrap, warn};
 use nucleo_h723zg_udp_echo::MAX_DATAGRAM_SIZE;
 use w5500_dhcp::hl::io::Write;
 use w5500_dhcp::hl::{Error, Udp};
@@ -12,6 +14,7 @@ use crate::w5500_offload::{Device, ECHO_SOCKET};
 
 pub struct Server {
     payload: [u8; MAX_DATAGRAM_SIZE],
+    #[cfg(not(feature = "benchmark"))]
     echo_count: u32,
 }
 
@@ -19,6 +22,7 @@ impl Server {
     pub const fn new() -> Self {
         Self {
             payload: [0; MAX_DATAGRAM_SIZE],
+            #[cfg(not(feature = "benchmark"))]
             echo_count: 0,
         }
     }
@@ -37,11 +41,14 @@ impl Server {
                 let mut reply = unwrap!(device.udp_writer(ECHO_SOCKET));
                 unwrap!(reply.write_all(&self.payload[..usize::from(length)]));
                 unwrap!(reply.udp_send_to(&source));
-                self.echo_count = self.echo_count.wrapping_add(1);
-                info!(
-                    "echoed {} decoded UDP payload bytes to {}; total={}",
-                    length, source, self.echo_count
-                );
+                #[cfg(not(feature = "benchmark"))]
+                {
+                    self.echo_count = self.echo_count.wrapping_add(1);
+                    info!(
+                        "echoed {} decoded UDP payload bytes to {}; total={}",
+                        length, source, self.echo_count
+                    );
+                }
             }
             Err(Error::WouldBlock) => {}
             Err(Error::OutOfMemory) => warn!("UDP datagram exceeds application buffer"),

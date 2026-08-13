@@ -13,6 +13,9 @@ native-udp = []
 wiznet = []
 wiznet-offload = []
 host-tests = []
+# Preserve startup/error diagnostics but omit successful per-packet RTT logs
+# during controlled throughput and reliability measurements.
+benchmark = []
 # Hardware acceptance-test only: deliberately withhold MCUboot confirmation
 # so the next reset must restore the previous image.
 rollback-test = []

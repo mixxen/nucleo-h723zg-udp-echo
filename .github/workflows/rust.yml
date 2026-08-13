@@ -30,6 +30,15 @@ jobs:
       - name: Run host tests
         run: cargo test --locked --no-default-features --features host-tests --test host --target x86_64-unknown-linux-gnu
 
+      - name: Check benchmark tool formatting
+        run: cargo fmt --manifest-path tools/udp-benchmark/Cargo.toml --check
+
+      - name: Test benchmark tool
+        run: cargo test --locked --manifest-path tools/udp-benchmark/Cargo.toml --target x86_64-unknown-linux-gnu
+
+      - name: Lint benchmark tool
+        run: cargo clippy --locked --manifest-path tools/udp-benchmark/Cargo.toml --target x86_64-unknown-linux-gnu --all-targets -- -D warnings
+
       # CI keys are disposable and exist only to link the complete firmware.
       - name: Provision disposable SSH build keys
         shell: pwsh
@@ -47,6 +56,9 @@ jobs:
       - name: Build native RMII UDP-only firmware
         run: cargo build --locked --release --no-default-features --features native-udp --bin nucleo-h723zg-native-rmii-udp-echo
 
+      - name: Lint benchmark-mode Embassy UDP server
+        run: cargo clippy --locked --release --no-default-features --features native-udp,benchmark --bin nucleo-h723zg-native-rmii-udp-echo -- -D warnings
+
       - name: Lint W5500 shield firmware
         run: cargo clippy --locked --release --no-default-features --features wiznet --bin nucleo-h723zg-w5500-udp-echo -- -D warnings
 
@@ -58,6 +70,9 @@ jobs:
 
       - name: Build W5500 hardware-offload firmware
         run: cargo build --locked --release --no-default-features --features wiznet-offload --bin nucleo-h723zg-w5500-offload-udp-echo
+
+      - name: Lint benchmark-mode offload UDP server
+        run: cargo clippy --locked --release --no-default-features --features wiznet-offload,benchmark --bin nucleo-h723zg-w5500-offload-udp-echo -- -D warnings
 
       - name: Install disposable signing tools
         run: python -m pip install --disable-pip-version-check imgtool==2.4.0
