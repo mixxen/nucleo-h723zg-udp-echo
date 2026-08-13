@@ -8,9 +8,10 @@ use embassy_stm32::{Config, Peripherals};
 
 /// Initialize the STM32H723 and return its peripheral tokens.
 ///
-/// W5500 variants request PLL1-Q because SPI1 uses it as a 200 MHz kernel
-/// clock. The native RMII performance build instead matches the C sample's
-/// 520 MHz CPU and 260 MHz AHB clocks; normal firmware remains at 400/200 MHz.
+/// W5500 variants need a kernel clock for SPI1. Normal firmware derives it
+/// from PLL1-Q; the performance build uses an independent 80 MHz PLL2-P so
+/// SPI1 can run at 40 MHz while the CPU remains at 520 MHz. Normal firmware
+/// remains at 400/200 MHz CPU/AHB.
 pub fn init(needs_spi1_clock: bool) -> Peripherals {
     let mut config = Config::default();
     {
@@ -37,16 +38,24 @@ pub fn init(needs_spi1_clock: bool) -> Peripherals {
             } else {
                 PllDiv::Div2
             }),
-            // At 520 MHz, DIV4 would clock SPI1 at 65 MHz after its minimum
-            // /2 baud divider. That proved unreliable through the stacked
-            // Arduino headers, so keep performance-mode SPI1 near 32.5 MHz.
-            divq: needs_spi1_clock.then_some(if performance_clock {
-                PllDiv::Div8
-            } else {
-                PllDiv::Div4
-            }),
+            divq: (needs_spi1_clock && !performance_clock).then_some(PllDiv::Div4),
             divr: None,
         });
+        if needs_spi1_clock && performance_clock {
+            // 64 MHz HSI / 4 * 40 / 8 = 80 MHz PLL2-P. SPI1's /2 baud
+            // divider then produces 40 MHz independently of the 520 MHz
+            // system PLL. The shield did not pass its DHCP test at 50 MHz
+            // when the MCU was also running at the performance clock.
+            config.rcc.pll2 = Some(Pll {
+                source: PllSource::Hsi,
+                prediv: PllPreDiv::Div4,
+                mul: PllMul::Mul40,
+                divp: Some(PllDiv::Div8),
+                divq: None,
+                divr: None,
+            });
+            config.rcc.mux.spi123sel = mux::Saisel::Pll2P;
+        }
         config.rcc.sys = Sysclk::Pll1P;
         config.rcc.ahb_pre = AHBPrescaler::Div2;
         config.rcc.apb1_pre = APBPrescaler::Div2;

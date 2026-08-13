@@ -136,19 +136,19 @@ controlled trials and limitations in
 ### Optimized W5500-offload result
 
 The W5500 hardwired-socket path now has its own performance build. It combines
-`opt-level=3`, a 520/260 MHz MCU/AHB clock, an approximately 32.5 MHz stable
-SPI clock, and a cached UDP destination register. Its repeated short sweep was
-zero-error from 1 through 12 kHz, compared with 1 through 7 kHz for the fresh
-control, and its saturation plateau increased from about 7,034 to 12,117
-valid packets/s. At the 1 kHz requirement it returned 30,000/30,000 with
-0.231/0.435 ms p50/p99 RTT.
+`opt-level=3`, a 520/260 MHz MCU/AHB clock, a dedicated 40 MHz SPI kernel
+path, and a cached UDP destination register. Its short sweep was zero-error
+from 1 through 14 kHz, compared with 1 through 7 kHz for the fresh control,
+and its saturation plateau increased from about 7,034 to 14,242 valid
+packets/s. The earlier 1 kHz trial returned 30,000/30,000 with 0.231/0.435 ms
+p50/p99 RTT.
 
 The cached peer increases the offload UDP-server metric by seven NCLOC and
 static RAM by 56 bytes; making SPI frequency explicit adds one shared bring-up
-NCLOC to both W5500 variants. The offload performance signed image is 36,608
-bytes. A 30-second 12 kHz run had 130 missing of 360,000, so 11 kHz remains
-the conservative sustained point. Full staged results and the reason DMA was
-deferred are in
+NCLOC to both W5500 variants. The offload performance signed image is 36,640
+bytes. The final 30-second 14 kHz boundary run returned all 420,000 packets.
+Full staged results, the failed 50 MHz trial, and the reason DMA was deferred
+are in
 [STREAM_BENCHMARK_REPORT.md](STREAM_BENCHMARK_REPORT.md#w5500-hardware-offload-optimization).
 
 The previous MACRAW timer shim was removed, saving first-party bring-up code.
