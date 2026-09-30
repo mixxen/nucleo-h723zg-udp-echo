@@ -3,12 +3,24 @@ name: Messaging prototype
 on:
   push:
     paths:
+      - 'Rust/Cargo.*'
+      - 'Rust/src/bin/native_rmii_multicast_smoke.rs'
+      - 'Rust/src/bringup/**'
+      - 'Rust/src/board.rs'
+      - 'Rust/tools/build-signed.ps1'
+      - 'Rust/tools/flash.ps1'
       - 'Rust/messaging/**'
       - 'Rust/protocol/**'
       - 'Rust/tools/message-demo/**'
       - '.github/workflows/messaging.yml'
   pull_request:
     paths:
+      - 'Rust/Cargo.*'
+      - 'Rust/src/bin/native_rmii_multicast_smoke.rs'
+      - 'Rust/src/bringup/**'
+      - 'Rust/src/board.rs'
+      - 'Rust/tools/build-signed.ps1'
+      - 'Rust/tools/flash.ps1'
       - 'Rust/messaging/**'
       - 'Rust/protocol/**'
       - 'Rust/tools/message-demo/**'
@@ -18,7 +30,7 @@ permissions:
   contents: read
 
 jobs:
-  phase-2:
+  host:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v6
@@ -31,3 +43,39 @@ jobs:
           python-version: '3.12'
       - run: python -m pip install -r Rust/protocol/requirements-phase1.txt
       - run: python Rust/tools/message-demo/verify.py
+
+  board-smoke:
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: Rust
+    steps:
+      - uses: actions/checkout@v6
+      # The pinned Embassy manifests require newer Cargo than the portable 1.90 toolchain.
+      - uses: dtolnay/rust-toolchain@stable
+        with:
+          components: clippy, llvm-tools, rustfmt
+          targets: thumbv7em-none-eabihf
+      - run: cargo fmt --check
+      - run: cargo clippy --locked --release --no-default-features --features multicast-smoke --bin nucleo-h723zg-native-rmii-multicast-smoke -- -D warnings
+      - run: cargo build --locked --release --no-default-features --features multicast-smoke --bin nucleo-h723zg-native-rmii-multicast-smoke
+      - name: Check PowerShell script syntax
+        shell: pwsh
+        run: |
+          foreach ($path in @("tools/build-signed.ps1", "tools/flash.ps1")) {
+            $tokens = $null
+            $parseErrors = $null
+            [System.Management.Automation.Language.Parser]::ParseFile((Resolve-Path $path), [ref]$tokens, [ref]$parseErrors) | Out-Null
+            if ($parseErrors.Count) { throw ($parseErrors | Out-String) }
+          }
+      - name: Package and verify smoke image with a disposable CI key
+        run: |
+          python -m pip install imgtool==2.4.0
+          mkdir -p artifacts
+          imgtool keygen --key "$RUNNER_TEMP/smoke-ci.pem" --type ed25519
+          host_triple="$(rustc -vV | sed -n 's/^host: //p')"
+          objcopy="$(rustc --print sysroot)/lib/rustlib/$host_triple/bin/llvm-objcopy"
+          "$objcopy" -O binary target/thumbv7em-none-eabihf/release/nucleo-h723zg-native-rmii-multicast-smoke artifacts/smoke-unsigned.bin
+          imgtool sign --key "$RUNNER_TEMP/smoke-ci.pem" --align 32 --max-align 32 --header-size 0x200 --pad-header --slot-size 0x60000 --max-sectors 4 --version 0.0.0+0 artifacts/smoke-unsigned.bin artifacts/smoke-ci-signed.bin
+          imgtool verify --key "$RUNNER_TEMP/smoke-ci.pem" artifacts/smoke-ci-signed.bin
+          test "$(stat -c%s artifacts/smoke-ci-signed.bin)" -le 262144

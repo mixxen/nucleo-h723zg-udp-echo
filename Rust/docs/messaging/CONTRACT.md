@@ -7,8 +7,8 @@ this document. [Plan](PLAN.md) · [Integration](INTEGRATION.md) ·
 ## Authoring decision
 
 Maintain message structure in [messaging.proto](../../protocol/messaging.proto).
-Use established Protobuf generation for Rust (`micropb`) and Python. A small
-Phase 2 adapter will read a protoc descriptor to derive CSV/JSON types and
+Use established Protobuf generation for Rust (`micropb`) and Python. The small
+Phase 2 adapter reads a protoc descriptor to derive CSV/JSON types and
 reference documentation for this limited schema. No YAML-to-Protobuf compiler.
 [profile.json](../../protocol/profile.json) adds capacities, explicit CSV column
 order and demo defaults; it does not redefine field types or numeric tags.
@@ -16,9 +16,8 @@ No lists, maps, recursive messages or runtime schema discovery in v1.
 
 The JSON mapping below is **prototype-json-v1, not ProtoJSON**. This avoids
 implying compatibility with ProtoJSON's enum, naming and presence conventions.
-The descriptor-adapter feasibility remains a Phase 2 implementation gate; if
-micropb accessors require adapters, keep those small rather than changing the
-schema to suit one codec. No format has been selected for production.
+Phase 2 verified the descriptor adapter and bounded codecs. Keep adapters small
+rather than changing the schema to suit one codec. No format has been selected for production.
 
 ## Transport and framing
 

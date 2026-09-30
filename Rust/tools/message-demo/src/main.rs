@@ -4,11 +4,15 @@ use serde_json::{Value, json};
 use std::{
     collections::BTreeMap,
     error::Error,
-    fs::File,
-    io::{self, BufRead, Write},
+    io::{self, BufRead},
     net::UdpSocket,
-    time::{Instant, SystemTime, UNIX_EPOCH},
+    sync::{Arc, Mutex},
+    time::{Duration, Instant},
 };
+
+mod log;
+mod streams;
+use log::Log;
 
 type Result<T> = std::result::Result<T, Box<dyn Error>>;
 fn nonce() -> Result<String> {
@@ -29,51 +33,31 @@ fn revision() -> String {
         .map(|o| String::from_utf8_lossy(&o.stdout).trim().to_owned())
         .unwrap_or_else(|| "unknown".into())
 }
-struct Log {
-    output: Box<dyn Write>,
-    metadata: Value,
-    start: Instant,
-}
-impl Log {
-    fn event(
-        &mut self,
-        outcome: &str,
-        peer: Option<String>,
-        length: usize,
-        message: Option<&Envelope>,
-        rejected_bytes: Option<&[u8]>,
-    ) -> io::Result<()> {
-        let mut event = self.metadata.clone();
-        event["outcome"] = json!(outcome);
-        event["peer"] = json!(peer);
-        event["raw_length"] = json!(length);
-        event["monotonic_ms"] = json!(self.start.elapsed().as_secs_f64() * 1000.0);
-        event["unix_ms"] = json!(
-            SystemTime::now()
-                .duration_since(UNIX_EPOCH)
-                .unwrap_or_default()
-                .as_millis() as u64
-        );
-        event["message"] = json!(message);
-        if let Some(bytes) = rejected_bytes {
-            let sample: String = bytes
-                .iter()
-                .take(64)
-                .map(|byte| format!("{byte:02x}"))
-                .collect();
-            event["raw_prefix_hex"] = json!(sample);
-        }
-        serde_json::to_writer(&mut self.output, &event)?;
-        writeln!(self.output)?;
-        self.output.flush()
-    }
-}
 #[derive(Default)]
 struct Counters {
     received: u32,
     rejected: u32,
     send_errors: u32,
     active_send_error: bool,
+    active_stream_error: [bool; 2],
+    skipped: u32,
+}
+impl Counters {
+    fn health(&self) -> Health {
+        Health {
+            state: Some(
+                if self.active_send_error || self.active_stream_error.iter().any(|v| *v) {
+                    2
+                } else {
+                    1
+                },
+            ),
+            received_requests: Some(self.received),
+            rejected_datagrams: Some(self.rejected),
+            send_errors: Some(self.send_errors),
+            skipped_publications: Some(self.skipped),
+        }
+    }
 }
 // Token bucket limits error replies only; read commands are never retried by the service.
 struct ErrorBudget {
@@ -139,23 +123,31 @@ fn serve(options: BTreeMap<String, String>) -> Result<()> {
     };
     validation::validate(&probe, format).map_err(|e| e.outcome())?;
     let socket = UdpSocket::bind(bind)?;
+    socket.set_write_timeout(Some(Duration::from_millis(50)))?;
     let local = socket.local_addr()?;
     let start = Instant::now();
-    let output: Box<dyn Write> = match options.get("log") {
-        Some(path) => Box::new(File::create(path)?),
-        None => Box::new(io::stdout()),
-    };
-    let mut log = Log {
-        output,
+    let publishers = streams::Publisher::configure(&options, local.port())?;
+    let log = Log::new(
+        options.get("log"),
+        format,
+        local.to_string(),
+        local.ip().to_string(),
+        device,
+        &boot,
         start,
-        metadata: json!({"run_id":nonce()?,"revision":revision(),"protocol_version":1,"format":format.name(),"crc":"off","role":"responder","local_endpoint":local.to_string(),"interface":local.ip().to_string(),"device_id":device,"boot_id":boot}),
-    };
+    )?;
+    let counters = Arc::new(Mutex::new(Counters::default()));
+    for publisher in publishers {
+        publisher.start(
+            format,
+            template.clone(),
+            status.clone(),
+            counters.clone(),
+            log.clone(),
+            start,
+        )?;
+    }
     log.event("ready", None, 0, None, None)?;
-    eprintln!(
-        "Ready: {local} / {} / {device} (synthetic {sample}; CRC off)",
-        format.name()
-    );
-    let mut counters = Counters::default();
     let mut budget = ErrorBudget {
         tokens: 10.0,
         updated: Instant::now(),
@@ -174,7 +166,10 @@ fn serve(options: BTreeMap<String, String>) -> Result<()> {
         let request = match parse(format, &input[..length]) {
             Ok(message) => message,
             Err(error) => {
-                counters.rejected = counters.rejected.saturating_add(1);
+                {
+                    let mut shared = counters.lock().unwrap();
+                    shared.rejected = shared.rejected.saturating_add(1);
+                }
                 log.event(
                     error.outcome(),
                     Some(peer.to_string()),
@@ -192,7 +187,10 @@ fn serve(options: BTreeMap<String, String>) -> Result<()> {
         let error = if accepted {
             None
         } else {
-            counters.rejected = counters.rejected.saturating_add(1);
+            {
+                let mut shared = counters.lock().unwrap();
+                shared.rejected = shared.rejected.saturating_add(1);
+            }
             let outcome = validity.err().unwrap_or(CodecError::Validation).outcome();
             log.event(
                 outcome,
@@ -225,7 +223,10 @@ fn serve(options: BTreeMap<String, String>) -> Result<()> {
             })
         };
         if accepted {
-            counters.received = counters.received.saturating_add(1);
+            {
+                let mut shared = counters.lock().unwrap();
+                shared.received = shared.received.saturating_add(1);
+            }
             log.event(
                 "accepted_request",
                 Some(peer.to_string()),
@@ -253,15 +254,7 @@ fn serve(options: BTreeMap<String, String>) -> Result<()> {
                 })
             }
             12 => response.status = Some(status.clone()),
-            13 => {
-                response.health = Some(Health {
-                    state: Some(if counters.active_send_error { 2 } else { 1 }),
-                    received_requests: Some(counters.received),
-                    rejected_datagrams: Some(counters.rejected),
-                    send_errors: Some(counters.send_errors),
-                    skipped_publications: Some(0),
-                })
-            }
+            13 => response.health = Some(counters.lock().unwrap().health()),
             14 => response.error = Some(messaging_codec::model::Error { code: error }),
             _ => unreachable!(),
         }
@@ -269,11 +262,14 @@ fn serve(options: BTreeMap<String, String>) -> Result<()> {
         let outcome = match socket.send_to(&output[..length], peer) {
             Ok(n) if n == length => "sent_response",
             _ => {
-                counters.send_errors = counters.send_errors.saturating_add(1);
+                {
+                    let mut shared = counters.lock().unwrap();
+                    shared.send_errors = shared.send_errors.saturating_add(1);
+                }
                 "send_error"
             }
         };
-        counters.active_send_error = outcome == "send_error";
+        counters.lock().unwrap().active_send_error = outcome == "send_error";
         log.event(
             outcome,
             Some(peer.to_string()),
@@ -281,11 +277,6 @@ fn serve(options: BTreeMap<String, String>) -> Result<()> {
             Some(&response),
             None,
         )?;
-        eprintln!(
-            "{outcome}: kind={} request={} peer={peer} ({length} bytes)",
-            response.kind.unwrap(),
-            response.request_id.unwrap()
-        );
     }
 }
 fn codec_operation(input: Value) -> std::result::Result<Value, &'static str> {
@@ -332,11 +323,11 @@ fn main() -> Result<()> {
         Some("serve")=>{
             let mut options=BTreeMap::new();
             while let Some(flag)=args.next() {
-                let key=flag.strip_prefix("--").filter(|key|matches!(*key,"format"|"bind"|"device"|"sample"|"log")).ok_or("unknown flag")?;
+                let key=flag.strip_prefix("--").filter(|key|matches!(*key,"format"|"bind"|"device"|"sample"|"log"|"multicast-interface"|"group"|"status-port"|"health-port"|"status-hz"|"health-hz")).ok_or("unknown flag")?;
                 if options.insert(key.to_owned(),args.next().ok_or("missing flag value")?).is_some(){return Err("duplicate flag".into());}
             }
             serve(options)
         },
-        _=>Err("Usage: message-demo serve --format csv|json|protobuf [--bind 127.0.0.1:42000] [--device board-01] [--sample valid|unavailable|fault] [--log run.jsonl]\n       message-demo codec  (JSONL fixture runner on stdin/stdout)".into()),
+        _=>Err("Usage: message-demo serve --format csv|json|protobuf [--bind 127.0.0.1:42000] [--device board-01] [--sample valid|unavailable|fault] [--log run.jsonl] [--multicast-interface IPv4 --group 239.255.42.1 --status-port 42001 --health-port 42002 --status-hz 10 --health-hz 1]\n       message-demo codec  (JSONL fixture runner on stdin/stdout)".into()),
     }
 }

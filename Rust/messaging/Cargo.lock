@@ -45,12 +45,12 @@ dependencies = [
 
 [[package]]
 name = "heapless"
-version = "0.9.1"
+version = "0.9.3"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "b1edcd5a338e64688fbdcb7531a846cfd3476a54784dcb918a0844682bc7ada5"
+checksum = "25ba4bd83f9415b58b4ed8dc5714c76e626a105be4646c02630ad730ad3b5aa4"
 dependencies = [
  "hash32",
- "serde",
+ "serde_core",
  "stable_deref_trait",
 ]
 
@@ -65,7 +65,7 @@ name = "messaging-codec"
 version = "0.1.0"
 dependencies = [
  "csv-core",
- "heapless 0.9.1",
+ "heapless 0.9.3",
  "micropb",
  "ryu",
  "serde",
@@ -78,7 +78,7 @@ version = "0.6.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "e1bfc6ec8daaec9373b02386de3f58b46c578122c48324bbee23bef86afd5240"
 dependencies = [
- "heapless 0.9.1",
+ "heapless 0.9.3",
  "num-traits",
 ]
 

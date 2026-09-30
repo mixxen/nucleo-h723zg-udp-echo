@@ -708,5 +708,7 @@ comparison with unicast read requests and multicast status/health. Start with th
 [schema and fixture checks](protocol/README.md), and
 [current checkpoint](docs/messaging/CHECKPOINT.md). The
 [Phase 2 walkthrough](docs/messaging/PHASE2.md) runs a Rust host responder and Python
-client in all three formats. Multicast and the board application are later phases.
+client in all three formats. The [Phase 3 walkthrough](docs/messaging/PHASE3.md)
+adds multicast status/health and two listeners. A [NUCLEO smoke image](docs/messaging/SMOKE_BENCH.md)
+is available for bench testing; the full board service is Phase 4.
 Existing echo, management and benchmark instructions above still describe the available applications.
