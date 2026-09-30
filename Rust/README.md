@@ -699,3 +699,13 @@ and `benchmark` firmware remain unchanged and performance comparisons use the
 same `profiling` feature on all three Rust variants. Stack high-water is measured by
 painting unused stack at reset and scanning it after the trial; static RAM is
 derived from the same profiling firmware's linker boundaries.
+
+## Message-format and multicast prototype
+
+The [messaging plan](docs/messaging/PLAN.md) adds a separate CSV/JSON/Protobuf
+comparison with unicast read requests and multicast status/health. Start with the
+[Phase 1 contract](docs/messaging/CONTRACT.md),
+[schema and fixture checks](protocol/README.md), and
+[current checkpoint](docs/messaging/CHECKPOINT.md). Phase 1 defines the contract;
+the executable messaging demo is not implemented yet. Existing echo, management
+and benchmark instructions above still describe the available applications.

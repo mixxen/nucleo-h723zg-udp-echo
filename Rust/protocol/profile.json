@@ -1,0 +1,34 @@
+{
+  "profile_version": 1,
+  "schema": "messaging.proto",
+  "json_mapping": "prototype-json-v1",
+  "max_datagram_bytes": 1024,
+  "max_body_bytes": 1016,
+  "crc_trailer_bytes": 8,
+  "common_csv_columns": ["protocol_version", "kind", "device_id", "boot_id", "client_session", "request_id", "sequence", "uptime_ms"],
+  "body_csv_columns": {
+    "get_device_info": [], "get_status": [], "get_health": [],
+    "device_info": ["firmware_version", "encoding"],
+    "status": ["temperature_celsius", "validity", "synthetic"],
+    "health": ["state", "received_requests", "rejected_datagrams", "send_errors", "skipped_publications"],
+    "error": ["code"]
+  },
+  "string_max_utf8_bytes": {
+    "Envelope.device_id": 32,
+    "Envelope.boot_id": 16,
+    "Envelope.client_session": 16,
+    "DeviceInfo.firmware_version": 32
+  },
+  "demo_defaults": {
+    "command_port": 42000,
+    "multicast_group": "239.255.42.1",
+    "status_port": 42001,
+    "health_port": 42002,
+    "multicast_ttl": 1,
+    "status_hz": 10,
+    "health_hz": 1,
+    "request_timeout_ms": 1000,
+    "status_stale_ms": 500,
+    "health_stale_ms": 3000
+  }
+}

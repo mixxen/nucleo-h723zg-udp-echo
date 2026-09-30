@@ -1,0 +1,630 @@
+{
+  "description": "Authored semantic fixtures; rejection expectations are contract cases for later codec/runtime tests, not implemented validation results.",
+  "unavailable_not_applicable": {
+    "get_device_info": "Request carries no measurement.",
+    "get_status": "Request carries no measurement.",
+    "get_health": "Request carries no measurement.",
+    "device_info": "Required local identity/version must be available; otherwise initialization fails.",
+    "health": "Local counters are known; remote silence is tracked by listener, not fabricated health.",
+    "error": "Code is required; uncorrelatable failures produce no reply."
+  },
+  "valid": [
+    {
+      "name": "get_device_info",
+      "message": {
+        "protocol_version": 1,
+        "kind": 1,
+        "device_id": "board-01",
+        "client_session": "0123456789abcdef",
+        "request_id": 1,
+        "get_device_info": {}
+      }
+    },
+    {
+      "name": "get_status",
+      "message": {
+        "protocol_version": 1,
+        "kind": 2,
+        "device_id": "board-01",
+        "client_session": "0123456789abcdef",
+        "request_id": 1,
+        "get_status": {}
+      }
+    },
+    {
+      "name": "get_health",
+      "message": {
+        "protocol_version": 1,
+        "kind": 3,
+        "device_id": "board-01",
+        "client_session": "0123456789abcdef",
+        "request_id": 1,
+        "get_health": {}
+      }
+    },
+    {
+      "name": "device_info_csv",
+      "message": {
+        "protocol_version": 1,
+        "device_id": "board-01",
+        "boot_id": "fedcba9876543210",
+        "client_session": "0123456789abcdef",
+        "request_id": 1,
+        "uptime_ms": 12345,
+        "kind": 11,
+        "device_info": {
+          "firmware_version": "demo-0.1.0",
+          "encoding": 1
+        }
+      }
+    },
+    {
+      "name": "device_info_json",
+      "message": {
+        "protocol_version": 1,
+        "device_id": "board-01",
+        "boot_id": "fedcba9876543210",
+        "client_session": "0123456789abcdef",
+        "request_id": 1,
+        "uptime_ms": 12345,
+        "kind": 11,
+        "device_info": {
+          "firmware_version": "demo-0.1.0",
+          "encoding": 2
+        }
+      }
+    },
+    {
+      "name": "device_info_protobuf",
+      "message": {
+        "protocol_version": 1,
+        "device_id": "board-01",
+        "boot_id": "fedcba9876543210",
+        "client_session": "0123456789abcdef",
+        "request_id": 1,
+        "uptime_ms": 12345,
+        "kind": 11,
+        "device_info": {
+          "firmware_version": "demo-0.1.0",
+          "encoding": 3
+        }
+      }
+    },
+    {
+      "name": "device_info_escaping",
+      "message": {
+        "protocol_version": 1,
+        "device_id": "board-01",
+        "boot_id": "fedcba9876543210",
+        "client_session": "0123456789abcdef",
+        "request_id": 1,
+        "uptime_ms": 12345,
+        "kind": 11,
+        "device_info": {
+          "firmware_version": "demo,\"quoted\"\\build",
+          "encoding": 2
+        }
+      }
+    },
+    {
+      "name": "status_response_valid",
+      "message": {
+        "protocol_version": 1,
+        "device_id": "board-01",
+        "boot_id": "fedcba9876543210",
+        "client_session": "0123456789abcdef",
+        "request_id": 1,
+        "uptime_ms": 12345,
+        "kind": 12,
+        "status": {
+          "temperature_celsius": 25.5,
+          "validity": 1,
+          "synthetic": true
+        }
+      }
+    },
+    {
+      "name": "status_response_zero",
+      "message": {
+        "protocol_version": 1,
+        "device_id": "board-01",
+        "boot_id": "fedcba9876543210",
+        "client_session": "0123456789abcdef",
+        "request_id": 1,
+        "uptime_ms": 12345,
+        "kind": 12,
+        "status": {
+          "temperature_celsius": 0,
+          "validity": 1,
+          "synthetic": true
+        }
+      }
+    },
+    {
+      "name": "status_response_unavailable",
+      "message": {
+        "protocol_version": 1,
+        "device_id": "board-01",
+        "boot_id": "fedcba9876543210",
+        "client_session": "0123456789abcdef",
+        "request_id": 1,
+        "uptime_ms": 12345,
+        "kind": 12,
+        "status": {
+          "validity": 2,
+          "synthetic": true
+        }
+      }
+    },
+    {
+      "name": "status_response_fault",
+      "message": {
+        "protocol_version": 1,
+        "device_id": "board-01",
+        "boot_id": "fedcba9876543210",
+        "client_session": "0123456789abcdef",
+        "request_id": 1,
+        "uptime_ms": 12345,
+        "kind": 12,
+        "status": {
+          "validity": 3,
+          "synthetic": true
+        }
+      }
+    },
+    {
+      "name": "status_publication_valid",
+      "message": {
+        "protocol_version": 1,
+        "device_id": "board-01",
+        "boot_id": "fedcba9876543210",
+        "uptime_ms": 12345,
+        "sequence": 0,
+        "kind": 21,
+        "status": {
+          "temperature_celsius": 25.5,
+          "validity": 1,
+          "synthetic": true
+        }
+      }
+    },
+    {
+      "name": "status_publication_zero",
+      "message": {
+        "protocol_version": 1,
+        "device_id": "board-01",
+        "boot_id": "fedcba9876543210",
+        "uptime_ms": 12345,
+        "sequence": 0,
+        "kind": 21,
+        "status": {
+          "temperature_celsius": 0,
+          "validity": 1,
+          "synthetic": true
+        }
+      }
+    },
+    {
+      "name": "status_publication_unavailable",
+      "message": {
+        "protocol_version": 1,
+        "device_id": "board-01",
+        "boot_id": "fedcba9876543210",
+        "uptime_ms": 12345,
+        "sequence": 0,
+        "kind": 21,
+        "status": {
+          "validity": 2,
+          "synthetic": true
+        }
+      }
+    },
+    {
+      "name": "status_publication_fault",
+      "message": {
+        "protocol_version": 1,
+        "device_id": "board-01",
+        "boot_id": "fedcba9876543210",
+        "uptime_ms": 12345,
+        "sequence": 0,
+        "kind": 21,
+        "status": {
+          "validity": 3,
+          "synthetic": true
+        }
+      }
+    },
+    {
+      "name": "health_response",
+      "message": {
+        "protocol_version": 1,
+        "device_id": "board-01",
+        "boot_id": "fedcba9876543210",
+        "client_session": "0123456789abcdef",
+        "request_id": 1,
+        "uptime_ms": 12345,
+        "kind": 13,
+        "health": {
+          "state": 1,
+          "received_requests": 1,
+          "rejected_datagrams": 0,
+          "send_errors": 0,
+          "skipped_publications": 0
+        }
+      }
+    },
+    {
+      "name": "health_publication",
+      "message": {
+        "protocol_version": 1,
+        "device_id": "board-01",
+        "boot_id": "fedcba9876543210",
+        "uptime_ms": 12345,
+        "sequence": 0,
+        "kind": 22,
+        "health": {
+          "state": 1,
+          "received_requests": 1,
+          "rejected_datagrams": 0,
+          "send_errors": 0,
+          "skipped_publications": 0
+        }
+      }
+    },
+    {
+      "name": "error_response",
+      "message": {
+        "protocol_version": 1,
+        "device_id": "board-01",
+        "boot_id": "fedcba9876543210",
+        "client_session": "0123456789abcdef",
+        "request_id": 1,
+        "uptime_ms": 12345,
+        "kind": 14,
+        "error": {
+          "code": 2
+        }
+      }
+    }
+  ],
+  "invalid": [
+    {
+      "name": "get_device_info_missing_request_id",
+      "message": {
+        "protocol_version": 1,
+        "kind": 1,
+        "device_id": "board-01",
+        "client_session": "0123456789abcdef",
+        "get_device_info": {}
+      },
+      "expected": "validation_error: required request_id"
+    },
+    {
+      "name": "get_status_missing_request_id",
+      "message": {
+        "protocol_version": 1,
+        "kind": 2,
+        "device_id": "board-01",
+        "client_session": "0123456789abcdef",
+        "get_status": {}
+      },
+      "expected": "validation_error: required request_id"
+    },
+    {
+      "name": "get_health_missing_request_id",
+      "message": {
+        "protocol_version": 1,
+        "kind": 3,
+        "device_id": "board-01",
+        "client_session": "0123456789abcdef",
+        "get_health": {}
+      },
+      "expected": "validation_error: required request_id"
+    },
+    {
+      "name": "wrong_version",
+      "message": {
+        "protocol_version": 2,
+        "kind": 2,
+        "device_id": "board-01",
+        "client_session": "0123456789abcdef",
+        "request_id": 1,
+        "get_status": {}
+      },
+      "expected": "version_error"
+    },
+    {
+      "name": "zero_client_session",
+      "message": {
+        "protocol_version": 1,
+        "kind": 2,
+        "device_id": "board-01",
+        "client_session": "0000000000000000",
+        "request_id": 1,
+        "get_status": {}
+      },
+      "expected": "validation_error: nonzero session"
+    },
+    {
+      "name": "wrong_body",
+      "message": {
+        "protocol_version": 1,
+        "kind": 3,
+        "device_id": "board-01",
+        "client_session": "0123456789abcdef",
+        "request_id": 1,
+        "get_status": {}
+      },
+      "expected": "validation_error: kind/body mismatch"
+    },
+    {
+      "name": "info_missing_version",
+      "message": {
+        "protocol_version": 1,
+        "device_id": "board-01",
+        "boot_id": "fedcba9876543210",
+        "client_session": "0123456789abcdef",
+        "request_id": 1,
+        "uptime_ms": 12345,
+        "kind": 11,
+        "device_info": {
+          "encoding": 2
+        }
+      },
+      "expected": "validation_error: firmware_version required"
+    },
+    {
+      "name": "info_oversized_version",
+      "message": {
+        "protocol_version": 1,
+        "device_id": "board-01",
+        "boot_id": "fedcba9876543210",
+        "client_session": "0123456789abcdef",
+        "request_id": 1,
+        "uptime_ms": 12345,
+        "kind": 11,
+        "device_info": {
+          "firmware_version": "xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx",
+          "encoding": 2
+        }
+      },
+      "expected": "validation_error: firmware_version bound"
+    },
+    {
+      "name": "status_response_valid_missing_temperature",
+      "message": {
+        "protocol_version": 1,
+        "device_id": "board-01",
+        "boot_id": "fedcba9876543210",
+        "client_session": "0123456789abcdef",
+        "request_id": 1,
+        "uptime_ms": 12345,
+        "kind": 12,
+        "status": {
+          "validity": 1,
+          "synthetic": true
+        }
+      },
+      "expected": "validation_error: VALID requires temperature"
+    },
+    {
+      "name": "status_response_valid_out_of_range",
+      "message": {
+        "protocol_version": 1,
+        "device_id": "board-01",
+        "boot_id": "fedcba9876543210",
+        "client_session": "0123456789abcdef",
+        "request_id": 1,
+        "uptime_ms": 12345,
+        "kind": 12,
+        "status": {
+          "temperature_celsius": 201,
+          "validity": 1,
+          "synthetic": true
+        }
+      },
+      "expected": "validation_error: temperature range"
+    },
+    {
+      "name": "status_response_valid_not_synthetic",
+      "message": {
+        "protocol_version": 1,
+        "device_id": "board-01",
+        "boot_id": "fedcba9876543210",
+        "client_session": "0123456789abcdef",
+        "request_id": 1,
+        "uptime_ms": 12345,
+        "kind": 12,
+        "status": {
+          "temperature_celsius": 25.5,
+          "validity": 1,
+          "synthetic": false
+        }
+      },
+      "expected": "validation_error: prototype synthetic flag"
+    },
+    {
+      "name": "status_publication_valid_missing_temperature",
+      "message": {
+        "protocol_version": 1,
+        "device_id": "board-01",
+        "boot_id": "fedcba9876543210",
+        "uptime_ms": 12345,
+        "sequence": 0,
+        "kind": 21,
+        "status": {
+          "validity": 1,
+          "synthetic": true
+        }
+      },
+      "expected": "validation_error: VALID requires temperature"
+    },
+    {
+      "name": "status_publication_valid_out_of_range",
+      "message": {
+        "protocol_version": 1,
+        "device_id": "board-01",
+        "boot_id": "fedcba9876543210",
+        "uptime_ms": 12345,
+        "sequence": 0,
+        "kind": 21,
+        "status": {
+          "temperature_celsius": 201,
+          "validity": 1,
+          "synthetic": true
+        }
+      },
+      "expected": "validation_error: temperature range"
+    },
+    {
+      "name": "status_publication_valid_not_synthetic",
+      "message": {
+        "protocol_version": 1,
+        "device_id": "board-01",
+        "boot_id": "fedcba9876543210",
+        "uptime_ms": 12345,
+        "sequence": 0,
+        "kind": 21,
+        "status": {
+          "temperature_celsius": 25.5,
+          "validity": 1,
+          "synthetic": false
+        }
+      },
+      "expected": "validation_error: prototype synthetic flag"
+    },
+    {
+      "name": "unavailable_has_value",
+      "message": {
+        "protocol_version": 1,
+        "device_id": "board-01",
+        "boot_id": "fedcba9876543210",
+        "client_session": "0123456789abcdef",
+        "request_id": 1,
+        "uptime_ms": 12345,
+        "kind": 12,
+        "status": {
+          "validity": 2,
+          "synthetic": true,
+          "temperature_celsius": 0
+        }
+      },
+      "expected": "validation_error: unavailable value must be absent"
+    },
+    {
+      "name": "publication_has_request",
+      "message": {
+        "protocol_version": 1,
+        "device_id": "board-01",
+        "boot_id": "fedcba9876543210",
+        "uptime_ms": 12345,
+        "sequence": 0,
+        "kind": 21,
+        "status": {
+          "temperature_celsius": 25.5,
+          "validity": 1,
+          "synthetic": true
+        },
+        "request_id": 1
+      },
+      "expected": "validation_error: publication request_id forbidden"
+    },
+    {
+      "name": "response_missing_boot",
+      "message": {
+        "protocol_version": 1,
+        "device_id": "board-01",
+        "client_session": "0123456789abcdef",
+        "request_id": 1,
+        "uptime_ms": 12345,
+        "kind": 12,
+        "status": {
+          "temperature_celsius": 25.5,
+          "validity": 1,
+          "synthetic": true
+        }
+      },
+      "expected": "validation_error: boot_id required"
+    },
+    {
+      "name": "health_response_missing_counter",
+      "message": {
+        "protocol_version": 1,
+        "device_id": "board-01",
+        "boot_id": "fedcba9876543210",
+        "client_session": "0123456789abcdef",
+        "request_id": 1,
+        "uptime_ms": 12345,
+        "kind": 13,
+        "health": {
+          "state": 1,
+          "received_requests": 1,
+          "rejected_datagrams": 0,
+          "skipped_publications": 0
+        }
+      },
+      "expected": "validation_error: all counters required"
+    },
+    {
+      "name": "health_publication_missing_counter",
+      "message": {
+        "protocol_version": 1,
+        "device_id": "board-01",
+        "boot_id": "fedcba9876543210",
+        "uptime_ms": 12345,
+        "sequence": 0,
+        "kind": 22,
+        "health": {
+          "state": 1,
+          "received_requests": 1,
+          "rejected_datagrams": 0,
+          "skipped_publications": 0
+        }
+      },
+      "expected": "validation_error: all counters required"
+    },
+    {
+      "name": "unknown_error_code",
+      "message": {
+        "protocol_version": 1,
+        "device_id": "board-01",
+        "boot_id": "fedcba9876543210",
+        "client_session": "0123456789abcdef",
+        "request_id": 1,
+        "uptime_ms": 12345,
+        "kind": 14,
+        "error": {
+          "code": 99
+        }
+      },
+      "expected": "validation_error: unknown enum"
+    }
+  ],
+  "wire_rejections": [
+    {
+      "format": "csv",
+      "body": "1,2,board-01,,0123456789abcdef,1,,\r\nextra\r\n",
+      "expected": "decode_error: extra record"
+    },
+    {
+      "format": "json",
+      "body": "{\"protocol_version\":1,\"protocol_version\":2}",
+      "expected": "decode_error: duplicate key"
+    },
+    {
+      "format": "protobuf",
+      "hex": "0a05ff",
+      "expected": "decode_error: incomplete length-delimited field"
+    },
+    {
+      "format": "any",
+      "description": "1025 bytes received",
+      "expected": "size_error before decode"
+    },
+    {
+      "format": "any",
+      "description": "CRC-on packet with malformed or mismatched eight-character trailer",
+      "expected": "crc_error before decode"
+    }
+  ]
+}

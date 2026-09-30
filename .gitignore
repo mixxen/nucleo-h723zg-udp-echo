@@ -23,3 +23,6 @@ STM32CubeIDE/.vscode/
 .vs/
 .DS_Store
 Thumbs.db
+
+# Local host tooling for the messaging schema checks.
+.venv-messaging/
