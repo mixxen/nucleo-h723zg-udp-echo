@@ -1,0 +1,81 @@
+syntax = "proto3";
+package messaging.v1;
+
+// Prototype schema only. Presence and cross-field rules are in CONTRACT.md.
+// optional retains the distinction between an omitted value and a real zero.
+enum MessageKind {
+  MESSAGE_KIND_UNSPECIFIED = 0;
+  GET_DEVICE_INFO = 1;
+  GET_STATUS = 2;
+  GET_HEALTH = 3;
+  DEVICE_INFO_RESPONSE = 11;
+  STATUS_RESPONSE = 12;
+  HEALTH_RESPONSE = 13;
+  ERROR_RESPONSE = 14;
+  STATUS_PUBLICATION = 21;
+  HEALTH_PUBLICATION = 22;
+}
+enum Encoding {
+  ENCODING_UNSPECIFIED = 0;
+  CSV = 1;
+  JSON = 2;
+  PROTOBUF = 3;
+}
+enum Validity {
+  VALIDITY_UNSPECIFIED = 0;
+  VALID = 1;
+  UNAVAILABLE = 2;
+  SENSOR_FAULT = 3;
+}
+enum HealthState {
+  HEALTH_STATE_UNSPECIFIED = 0;
+  OK = 1;
+  DEGRADED = 2;
+}
+enum ErrorCode {
+  ERROR_CODE_UNSPECIFIED = 0;
+  UNSUPPORTED_KIND = 1;
+  INVALID_REQUEST = 2;
+}
+message Empty {}
+message DeviceInfo {
+  optional string firmware_version = 1;
+  optional Encoding encoding = 2;
+}
+message Status {
+  // Demonstration temperature, always synthetic in this prototype.
+  optional float temperature_celsius = 1;
+  optional Validity validity = 2;
+  optional bool synthetic = 3;
+}
+message Health {
+  optional HealthState state = 1;
+  optional uint32 received_requests = 2;
+  optional uint32 rejected_datagrams = 3;
+  optional uint32 send_errors = 4;
+  optional uint32 skipped_publications = 5;
+}
+message Error {
+  optional ErrorCode code = 1;
+}
+message Envelope {
+  optional uint32 protocol_version = 1;
+  optional MessageKind kind = 2;
+  // Requests name the target; responses/publications name the producer.
+  optional string device_id = 3;
+  optional string boot_id = 4;
+  optional string client_session = 5;
+  optional uint32 request_id = 6;
+  optional uint32 sequence = 7;
+  // Milliseconds since producer boot, modulo 2^32; not a UTC timestamp.
+  optional uint32 uptime_ms = 8;
+  oneof body {
+    Empty get_device_info = 20;
+    Empty get_status = 21;
+    Empty get_health = 22;
+    DeviceInfo device_info = 23;
+    Status status = 24;
+    Health health = 25;
+    Error error = 26;
+  }
+}
