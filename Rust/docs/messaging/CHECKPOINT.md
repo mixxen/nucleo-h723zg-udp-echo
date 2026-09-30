@@ -1,44 +1,61 @@
-# Phase 1 checkpoint
+# Phase 2 checkpoint
 
-Date: 2026-09-30. Base repository revision: b009dc08eca171083a4a52385d3583b3b3154d0b.
+Date: 2026-09-30. Base: merged Phase 1, `338a1cb` (PR #1).
 
 ## Delivered
 
-- Authoritative proto3 schema for three read requests, their responses, an error
-  response, and status/health publications.
-- Decision to use `.proto` plus limited companion metadata, not a YAML compiler.
-- Explicit custom JSON and CSV mappings, bounds, presence, correlation, stream
-  identity/freshness, CRC format and diagnostic outcomes.
-- 18 positive semantic fixtures, 20 semantic rejection expectations, 5 wire
-  rejection expectations, and an authored three-format request wire example.
-- Pinned networking API inspection, socket/buffer budget and build/signing plan.
-- Saved six-phase plan and navigation from Rust/README.md.
+- Reproducible `.proto` descriptor generation for micropb, bounded Rust models,
+  CSV mappings, Python Protobuf/metadata, and the [message reference](REFERENCE.md).
+- A portable `no_std` codec crate with CSV, custom prototype JSON, Protobuf,
+  fixed capacities, presence preservation, and shared semantic validation.
+- Rust host responder and Python client for device-info, status, and health reads.
+  Synthetic samples can be valid, unavailable, or faulty.
+- Request correlation, bounded completed/expired history, one outstanding request,
+  no retries, saturating health counters, and rate-limited error responses.
+- Human terminal output and JSONL diagnostics with capped rejected-byte samples.
+- [Runnable walkthrough](PHASE2.md), automated verification, and a dedicated CI job.
 
-## Verification performed
+## Verification performed locally
 
-`python Rust/protocol/tools/check_phase1.py` passed with grpcio-tools 1.76.0 and
-protobuf 6.33.6. Schema compiled; profile references resolved; all 18 positive
-fixtures survived generated Protobuf encode/decode; authored CSV/JSON/Protobuf
-request examples agreed. `git diff --check` passed.
+`python Rust/tools/message-demo/verify.py` passed with Rust 1.90.0, Python 3.12,
+grpcio-tools 1.76.0, protobuf 6.33.6, and micropb/micropb-gen 0.6.0:
 
-The check is a schema/fixture check, not a production codec. Negative fixtures
-are authored expected outcomes for Phase 2/5, not passing rejection tests.
-Examples were inspected during implementation; independent human review remains
-available through the pull request. No independent reviewer or board test is
-claimed.
+- 18 authored positive fixtures across all three formats, Python-to-Rust and
+  Rust-to-Python; independent golden request bytes match both encoders/decoders.
+- All 20 authored negative cases rejected by both encoders; receiver checks also
+  exercise each representable wire case. CSV cannot represent conflicting body
+  tags independently of its kind. A capacity overflow is a `decode_error`, now
+  clarified in the fixture.
+- Malformed quoting/JSON/Protobuf, wrong types/versions, null, duplicate and unknown
+  JSON keys, size bounds, missing fields, escaping, binary32 boundaries, absent
+  versus zero, and nonfinite measurements.
+- Standard Protobuf unknown fields, duplicate scalar replacement, submessage
+  merging, and oneof replacement agree with Python's Protobuf implementation.
+- Live loopback exchanges for all three commands/formats; unavailable samples;
+  counters, recovery after rejection, wrong target/version, no response loops,
+  unsupported kinds, and error-reply limiting.
+- Client timeout, late/duplicate and unmatched replies, with bounded history.
+- 11 test groups passed. Generation drift and isolated schema-change
+  reproducibility passed. Formatting and host/ARM Clippy passed.
+- A release ELF links for `thumbv7em-none-eabihf` with all three codecs reachable,
+  `no_std`, and no global allocator. This checks more than type-checking alone.
 
-## Not performed / remaining gates
+## Remaining gates
 
-No Rust toolchain is installed in this execution workspace, so no ARM build or
-micropb generation was run. No NUCLEO is connected here. Multicast, DHCP recovery,
-boot nonce generation, CRC corruption rejection, and signed-demo boot remain
-unverified. Existing firmware code, Cargo dependencies and network behavior are
-unchanged. Phase 1 can be reviewed without flashing anything.
+No NUCLEO is connected here. No physical Ethernet, multicast, DHCP recovery,
+signed image, stack high-water, or MCU performance result is claimed. The link
+probe is not a flashable application. Existing firmware and signing behavior
+are unchanged. GitHub CI results are separate from the local checks above.
 
-## Next: Phase 2
+CRC remains off; the Phase 1 CRC rejection expectation waits for Phase 5. The
+host service is synchronous for this command-only phase; Phase 3 must separate
+publication schedules from request arrival and add two-listener/staleness checks.
 
-Implement the narrow descriptor adapter and no-heap codec configurations, then
-Rust host responder and Python client. Add true validation/negative tests and
-cross-language fixtures. Resolve the JSON escaping library issue before claiming
-full support. Check each codec on ARM early. Do not advance to claims of physical
-multicast success until Phase 3's bench gate is actually exercised.
+## Next: Phase 3
+
+Add independent multicast status/health publishers and a Python listener using
+the existing codecs. Track per-stream sequences, duplicates/reordering,
+provisional gaps, boot changes and stale/recovered state. Demonstrate two
+listeners while commands remain responsive, then perform the physical NUCLEO
+multicast smoke test when bench access is available. Record that hardware gate
+as pending until actually tested.

@@ -1,0 +1,33 @@
+name: Messaging prototype
+
+on:
+  push:
+    paths:
+      - 'Rust/messaging/**'
+      - 'Rust/protocol/**'
+      - 'Rust/tools/message-demo/**'
+      - '.github/workflows/messaging.yml'
+  pull_request:
+    paths:
+      - 'Rust/messaging/**'
+      - 'Rust/protocol/**'
+      - 'Rust/tools/message-demo/**'
+      - '.github/workflows/messaging.yml'
+
+permissions:
+  contents: read
+
+jobs:
+  phase-2:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v6
+      - uses: dtolnay/rust-toolchain@1.90.0
+        with:
+          components: rustfmt, clippy
+          targets: thumbv7em-none-eabihf
+      - uses: actions/setup-python@v6
+        with:
+          python-version: '3.12'
+      - run: python -m pip install -r Rust/protocol/requirements-phase1.txt
+      - run: python Rust/tools/message-demo/verify.py

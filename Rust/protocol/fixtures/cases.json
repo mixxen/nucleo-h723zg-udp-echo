@@ -388,7 +388,7 @@
           "encoding": 2
         }
       },
-      "expected": "validation_error: firmware_version bound"
+      "expected": "decode_error: fixed-capacity firmware_version bound"
     },
     {
       "name": "status_response_valid_missing_temperature",
