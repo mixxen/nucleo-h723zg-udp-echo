@@ -210,6 +210,10 @@ RTT and deadlines with the host monotonic clock. No cross-machine one-way latenc
 claim without clock synchronization. Link-down health may only be visible locally
 until network recovery; silence alone does not identify why a device disappeared.
 
+Fixed-capacity string overflow is a `decode_error`: it prevents construction of
+the bounded message before application validation. A decoded message with missing
+required fields or invalid values produces `validation_error`.
+
 JSON Lines records: run ID, revision, schema/version, codec, CRC mode, role,
 endpoint, NIC, device/boot/client IDs when known, kind, request/sequence, local
 monotonic time, raw length, decoded values and outcome. Outcomes distinguish

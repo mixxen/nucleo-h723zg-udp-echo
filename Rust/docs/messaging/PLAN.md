@@ -1,7 +1,8 @@
 # Network Messaging Prototype: Phased Implementation Plan
 
 Date: 2026-09-30  
-Status: Original six-phase plan; Phase 1 artifacts are now delivered. See [current checkpoint](CHECKPOINT.md).  
+Status: Original six-phase plan; Phases 1 and 2 are delivered. See [current checkpoint](CHECKPOINT.md).
+
 Repository: https://github.com/mixxen/nucleo-h723zg-udp-echo  
 Reviewed baseline: `b009dc08eca171083a4a52385d3583b3b3154d0b`
 
@@ -142,7 +143,7 @@ Logs identify run, source revision, schema/protocol version, encoding, CRC mode,
 | Location | Purpose |
 |---|---|
 | `Rust/protocol/` | Authoritative definitions, supplemental metadata, and reviewed fixtures |
-| `Rust/src/messaging/` | Generated types, codecs, validation, and CRC |
+| `Rust/messaging/` | Portable crate: generated types, codecs, validation, and later CRC |
 | `Rust/src/servers/` | Command service and multicast publishers |
 | `Rust/src/bin/native_rmii_messaging.rs` | New firmware entry point |
 | `Rust/tools/message-demo/` | Host responder, Python tools, generation, and analysis |

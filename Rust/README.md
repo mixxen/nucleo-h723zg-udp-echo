@@ -706,6 +706,7 @@ The [messaging plan](docs/messaging/PLAN.md) adds a separate CSV/JSON/Protobuf
 comparison with unicast read requests and multicast status/health. Start with the
 [Phase 1 contract](docs/messaging/CONTRACT.md),
 [schema and fixture checks](protocol/README.md), and
-[current checkpoint](docs/messaging/CHECKPOINT.md). Phase 1 defines the contract;
-the executable messaging demo is not implemented yet. Existing echo, management
-and benchmark instructions above still describe the available applications.
+[current checkpoint](docs/messaging/CHECKPOINT.md). The
+[Phase 2 walkthrough](docs/messaging/PHASE2.md) runs a Rust host responder and Python
+client in all three formats. Multicast and the board application are later phases.
+Existing echo, management and benchmark instructions above still describe the available applications.

@@ -1,14 +1,15 @@
 # Messaging prototype definitions
 
 Start with [the contract](../docs/messaging/CONTRACT.md). This directory contains
-a Phase 1 design baseline, not a running firmware service.
+the maintained definitions for the [Phase 2 host demo](../docs/messaging/PHASE2.md).
+The board service is a later phase.
 
 - `messaging.proto`: authoritative message names, field types, tags and presence.
 - `profile.json`: CSV column ordering, capacity limits and demo settings.
 - `fixtures/cases.json`: 18 positive semantic examples, 20 semantic rejection
-  expectations and 5 wire rejection expectations. Rejections are not yet tested
-  against production decoders. Requests/identity/counters have no invented
-  unavailable measurement; the fixture file explains these N/A cases.
+  cases and 5 wire rejection expectations. Phase 2 exercises the codecs; the CRC
+  rejection expectation remains deferred to Phase 5. Requests/identity/counters
+  have no invented unavailable measurement; the fixture file explains these N/A cases.
 - `fixtures/golden_request.json`: manually specified equivalent request bodies in
   CSV, JSON and Protobuf. This checks an independent byte expectation against
   protoc rather than only testing an encoder against its own decoder.
@@ -35,6 +36,6 @@ positive examples can be represented, and one independently authored wire exampl
 agrees across formats. They do not establish runtime rejection behavior, micropb
 compatibility, heap-free MCU linking, throughput or multicast delivery.
 
-Phase 2 will pin the Rust generator and implement the actual CSV/JSON adapters,
-validation and host command/response service. Keep the generated outputs derived
-from these definitions rather than hand-editing each language's message types.
+The [Phase 2 verification script](../tools/message-demo/verify.py) checks the
+actual CSV/JSON/Protobuf codecs, validation and host command/response service. Keep
+the generated outputs derived from these definitions rather than hand-editing each language's message types.

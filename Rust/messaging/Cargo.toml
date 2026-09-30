@@ -1,0 +1,18 @@
+[package]
+name = "messaging-codec"
+version = "0.1.0"
+edition = "2024"
+publish = false
+
+[dependencies]
+micropb = { version = "=0.6.0", default-features = false, features = ["container-heapless-0-9", "encode", "decode"] }
+heapless = { version = "=0.9.1", features = ["serde"] }
+serde = { version = "=1.0.228", default-features = false, features = ["derive"] }
+serde-json-core = "=0.6.0"
+csv-core = "=0.1.13"
+ryu = "=1.0.23"
+
+
+[[example]]
+name = "no_alloc"
+path = "examples/no_alloc.rs"
