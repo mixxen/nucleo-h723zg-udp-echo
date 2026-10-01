@@ -6,6 +6,8 @@ param(
     [string]$ZephyrWorkspace = (Join-Path $env:USERPROFILE "zephyrproject-v4.4.0"),
     [switch]$NativeUdp,
     [switch]$MulticastSmoke,
+    [ValidateSet("", "csv", "json", "protobuf")]
+    [string]$Messaging = "",
     [switch]$W5500,
     [switch]$W5500Offload,
     [switch]$Benchmark,
@@ -14,12 +16,13 @@ param(
 )
 
 $ErrorActionPreference = "Stop"
+$Messaging = $Messaging.ToLowerInvariant()
 $projectRoot = Split-Path -Parent $PSScriptRoot
 $repositoryRoot = Split-Path -Parent $projectRoot
 
-$variantCount = @($NativeUdp, $W5500, $W5500Offload, $MulticastSmoke).Where({ $_ }).Count
+$variantCount = @($NativeUdp, $W5500, $W5500Offload, $MulticastSmoke, [bool]$Messaging).Where({ $_ }).Count
 if ($variantCount -gt 1) {
-    throw "Choose only one of -NativeUdp, -W5500, -W5500Offload, or -MulticastSmoke."
+    throw "Choose only one of -NativeUdp, -W5500, -W5500Offload, -MulticastSmoke, or -Messaging csv|json|protobuf."
 }
 if ($MulticastSmoke -and ($Benchmark -or $Profiling -or $Performance)) {
     throw "-MulticastSmoke uses its fixed Phase 3 bench configuration."
@@ -27,8 +30,8 @@ if ($MulticastSmoke -and ($Benchmark -or $Profiling -or $Performance)) {
 if ($Benchmark -and -not ($NativeUdp -or $W5500 -or $W5500Offload)) {
     throw "-Benchmark requires -NativeUdp, -W5500, or -W5500Offload."
 }
-if ($Profiling -and -not ($NativeUdp -or $W5500 -or $W5500Offload)) {
-    throw "-Profiling requires -NativeUdp, -W5500, or -W5500Offload."
+if ($Profiling -and -not ($NativeUdp -or $W5500 -or $W5500Offload -or $Messaging)) {
+    throw "-Profiling requires -NativeUdp, -W5500, -W5500Offload, or -Messaging."
 }
 if ($Performance -and -not ($NativeUdp -or $W5500 -or $W5500Offload)) {
     throw "-Performance requires -NativeUdp, -W5500, or -W5500Offload."
@@ -49,6 +52,7 @@ if (-not $SkipBuild) {
         -ZephyrWorkspace $ZephyrWorkspace `
         -NativeUdp:$NativeUdp `
         -MulticastSmoke:$MulticastSmoke `
+        -Messaging $Messaging `
         -W5500:$W5500 `
         -W5500Offload:$W5500Offload `
         -Benchmark:$Benchmark `
@@ -60,7 +64,9 @@ if (-not $SkipBuild) {
 }
 
 $bootloaderHex = Join-Path $repositoryRoot "Bootloader\build\zephyr\zephyr.hex"
-$signedApplicationName = if ($MulticastSmoke) {
+$signedApplicationName = if ($Messaging) {
+    "firmware-messaging-$Messaging-signed.bin"
+} elseif ($MulticastSmoke) {
     "firmware-multicast-smoke-signed.bin"
 } elseif ($W5500Offload) {
     "firmware-w5500-offload-signed.bin"

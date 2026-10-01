@@ -14,7 +14,7 @@ IDs/MACs before using several.
 
 This is a publisher-only bench image. Its request/rejection counters stay zero;
 there is no command endpoint, SSH updater, or trial-image confirmation service.
-The complete messaging application comes in Phase 4. Use the existing factory
+The [complete Phase 4 application](PHASE4.md) now adds commands and all three format choices. Use the existing factory
 install path for this smoke image, not a remote trial upgrade.
 
 From `Rust/`, compile without SSH keys:

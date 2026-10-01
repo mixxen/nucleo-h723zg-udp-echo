@@ -710,5 +710,10 @@ comparison with unicast read requests and multicast status/health. Start with th
 [Phase 2 walkthrough](docs/messaging/PHASE2.md) runs a Rust host responder and Python
 client in all three formats. The [Phase 3 walkthrough](docs/messaging/PHASE3.md)
 adds multicast status/health and two listeners. A [NUCLEO smoke image](docs/messaging/SMOKE_BENCH.md)
-is available for bench testing; the full board service is Phase 4.
+is available as the smaller publisher-only bench variant.
 Existing echo, management and benchmark instructions above still describe the available applications.
+
+The [Phase 4 NUCLEO walkthrough](docs/messaging/PHASE4.md) provides the complete
+read-command and multicast application, one encoding per image, signing/flash
+selectors, build resource measurements, and trial/recovery bench procedures.
+Physical Phase 3/4 gates remain pending; CRC is scheduled for Phase 5.

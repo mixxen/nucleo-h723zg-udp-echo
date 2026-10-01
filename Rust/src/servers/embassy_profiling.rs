@@ -15,7 +15,10 @@ pub async fn run(stack: Stack<'static>) -> ! {
     let mut request = [0u8; 16];
     let mut response = [0u8; PROFILING_WIRE_SIZE];
 
-    stack.wait_config_up().await;
+    // Leave the pinned stack's single state-waker slot to the network supervisor.
+    while !stack.is_config_up() {
+        embassy_time::Timer::after_millis(10).await;
+    }
     let mut socket = UdpSocket::new(
         stack,
         &mut rx_metadata,

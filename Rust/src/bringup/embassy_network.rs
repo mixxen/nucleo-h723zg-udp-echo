@@ -40,7 +40,16 @@ pub async fn supervise(
 
         // `select` races two futures and returns whichever completes first:
         // either DHCP produces a usable configuration, or the timer expires.
-        match select(stack.wait_config_up(), Timer::after(DHCP_TIMEOUT)).await {
+        let configuration = select(stack.wait_config_up(), Timer::after(DHCP_TIMEOUT));
+        let outcome = match select(configuration, stack.wait_link_down()).await {
+            Either::First(outcome) => outcome,
+            Either::Second(()) => {
+                warn!("link lost while waiting for DHCP; restarting supervision");
+                stack.set_config_v4(ConfigV4::Dhcp(Default::default()));
+                continue;
+            }
+        };
+        match outcome {
             Either::First(()) => {
                 // `config_v4` returns `Option` because a stack is allowed to
                 // have no IPv4 configuration. `if let Some` safely unwraps it
@@ -74,9 +83,9 @@ pub async fn supervise(
         // At this point either DHCP or the fallback supplied an address.
         ready_led.set_high();
         error_led.set_low();
-        // Sleep until the PHY reports that the cable/link went away.
-        stack.wait_link_down().await;
-        warn!("Ethernet link is down");
+        // Sleep until the link or IPv4 configuration disappears.
+        select(stack.wait_link_down(), stack.wait_config_down()).await;
+        warn!("Ethernet link or IPv4 configuration is down");
 
         // Return to DHCP mode so a reconnect can obtain a fresh lease, then
         // repeat the loop from the link-waiting state.

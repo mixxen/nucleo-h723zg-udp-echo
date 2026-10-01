@@ -10,8 +10,13 @@ publish = false
 default = ["firmware"]
 firmware = []
 native-udp = []
-# Phase 3 bench publisher only; the complete command service arrives in Phase 4.
-multicast-smoke = ["dep:messaging-codec", "embassy-net/multicast"]
+# Smaller Phase 3 bench publisher; full messaging variants follow below.
+multicast-smoke = ["dep:messaging-codec", "messaging-codec/protobuf", "embassy-net/multicast"]
+# Exactly one wire format per full messaging image; host defaults still include all three.
+messaging = ["dep:messaging-codec", "embassy-net/multicast"]
+messaging-csv = ["messaging", "messaging-codec/csv"]
+messaging-json = ["messaging", "messaging-codec/json"]
+messaging-protobuf = ["messaging", "messaging-codec/protobuf"]
 wiznet = []
 wiznet-offload = []
 host-tests = []
@@ -70,13 +75,20 @@ test = false
 bench = false
 required-features = ["multicast-smoke"]
 
+[[bin]]
+name = "nucleo-h723zg-native-rmii-messaging"
+path = "src/bin/native_rmii_messaging.rs"
+test = false
+bench = false
+required-features = ["messaging"]
+
 [[test]]
 name = "host"
 path = "tests/host.rs"
 required-features = ["host-tests"]
 
 [target.'cfg(target_arch = "arm")'.dependencies]
-messaging-codec = { path = "messaging", optional = true }
+messaging-codec = { path = "messaging", optional = true, default-features = false }
 embassy-stm32 = { version = "0.6.0", features = [
     "defmt",
     "exti",

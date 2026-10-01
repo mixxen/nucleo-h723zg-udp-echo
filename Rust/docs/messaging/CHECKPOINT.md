@@ -1,68 +1,68 @@
-# Phase 3 checkpoint
+# Phase 4 checkpoint
 
-Date: 2026-09-30. Base: merged Phase 2, `84a05a1` (PR #2).
+Date: 2026-10-01 UTC. Base: merged Phase 3, `4a431b8` (PR #3).
+Phase 3's Messaging prototype and Rust CI workflows both passed before this work.
 
-**Host implementation and build checks complete. Physical multicast gate pending.**
+**Implementation and local verification complete. Physical Phase 3/4 gates pending.**
 
 ## Delivered
 
-- Independent Rust host status/health publishers with explicit IPv4 interface,
-  configurable group/ports/rates, TTL 1, source-port binding and nonblocking sends.
-- A portable `no_std` publication schedule shared with the board smoke image:
-  missed slots advance sequences/counters without replaying stale snapshots.
-- Python multicast listener with two stream sockets, bounded sequence/reorder
-  windows, provisional/final gaps, boot retirement, stale/recovered diagnostics,
-  explicit device/source filters and JSONL logs. No ACKs/retransmissions.
-- Bounded host logging queue; a slow consumer cannot stall publication.
-- Protobuf-only native-RMII NUCLEO smoke image with hardware boot nonce, DHCP/
-  fallback supervision, two TX-only sockets, and local failure/skip counters.
-- `-MulticastSmoke` selectors in the existing signing/factory-flash scripts, and
-  CI checks for the host tests, ARM image, PowerShell syntax and image packaging.
-- [Host walkthrough](PHASE3.md) and [physical bench procedure](SMOKE_BENCH.md).
+- Dedicated native-RMII messaging image with read commands and independent status
+  and health publishers. Fixed buffers, short counter critical sections, explicit
+  receive-loop yielding, bounded local sends, and queue clearing on observed
+  link/configuration loss or local timeout.
+- One CSV, JSON or Protobuf codec enabled per image. Default host builds still
+  contain all three. Generated conversions honor those features reproducibly.
+- Portable command acceptance/error/drop policy shared by the host and MCU,
+  including the bounded error-reply budget and independent saturating health state.
+- Hardware boot nonce, local codec/task/timer checkpoint, verified MCUboot trial
+  confirmation, deliberate rollback-test variant, and optional existing profiling.
+- Network supervisor recovery when a cable is removed during DHCP or an IPv4
+  configuration disappears while link remains up. Application readiness checks
+  use a 10 ms timer so tasks do not contend for the pinned stack's single state
+  wake slot; optional profiling uses this approach at startup too.
+- `-Messaging csv|json|protobuf` signing/factory-flash selectors; separate artifact
+  names for formats, profiling and rollback-test images.
+- Paced Python command demo, profiling snapshot tool, firmware verification script,
+  CI build/package/resource gates, and [complete Phase 4 walkthrough](PHASE4.md).
 
 ## Verification performed locally
 
-`python Rust/tools/message-demo/verify.py` passed with portable Rust 1.90.0:
+- Portable `verify.py`: generation/reproducibility, formatting, host and ARM lint,
+  link without an allocator, five Rust tests, and all 18 Python command/codec/
+  multicast groups passed with Rust 1.90.0. Existing two-listener tests still pass
+  in every format while commands continue.
+- `verify_board.py`: all three release images built and passed Clippy with
+  warnings denied on Rust 1.98.1. Cargo metadata confirms exactly one codec feature
+  per image. Protobuf profiling and rollback variants built/linted; missing or
+  multiple firmware formats were rejected.
+- Disposable-key imgtool 2.4.0 signing and verification passed for every format.
+  Signed bytes: CSV 116,712; JSON 120,224; Protobuf 78,712. All fit the 262,144-byte
+  limit. Linked static RAM is 28,348 bytes in each baseline image. Section/symbol
+  reports distinguish task/DMA/network storage from unmeasured runtime stack use.
+- Existing native UDP echo release build and Protobuf smoke Clippy passed after
+  the supervisor/feature changes. No upstream dependency revision changed.
 
-- All 11 Phase 2 cross-language/command/rejection groups passed again.
-- Seven new groups passed: two listener processes with commands in all three
-  formats; observed multicast destination, source ports and TTL 1 on Linux;
-  stop/restart; SIGSTOP/SIGCONT stale/recovery and skipped slots; blocked stdout
-  logging while commands/publications continue; malformed traffic and no ACKs;
-  deterministic reorder, wrap, discontinuity, gap and boot-history rules.
-- Two Rust schedule tests passed; generation/format/lint gates and ARM linking
-  without an allocator passed.
+PowerShell runtime and GitHub CI results are separate from local Linux checks.
+The workflow retains PowerShell syntax checking and builds the existing smoke image.
 
-With the existing firmware stable toolchain, Rust 1.98.1:
+## Pending physical gates
 
-- New smoke image release build and Clippy passed against the unchanged Embassy
-  and xarxa commits. Zero-length RX queues and `try_send_to` compile and link.
-- Existing native-RMII UDP echo release build passed with the updated lockfile.
-- Smoke image signed with a disposable test key and verified with imgtool 2.4.0:
-  65,928 unsigned bytes, 66,584 signed bytes, below the 262,144-byte limit.
-- Root Rust formatting and `git diff --check` passed.
+No board was attached or flashed. Signed factory/trial boot, actual MCU command
+responses and two physical multicast receivers in each format, UDP checksum/TTL/
+IGMP behavior, DHCP fallback and reconnect, hardware RNG, reset identities, trial
+confirmation/rollback, and stack high-water still require bench evidence.
 
-The codec's exact `heapless` pin was updated to 0.9.3 to satisfy the existing
-Embassy dependency. No upstream revision changed. GitHub CI and PowerShell
-execution results are separate from these local Linux checks.
+The [Phase 4 acceptance checklist](PHASE4.md#physical-acceptance-record) carries
+those gates; [Phase 3's physical multicast checklist](SMOKE_BENCH.md) remains open.
+Local queue draining is not receiver acknowledgment, and application counters do
+not see packets dropped below the socket. Host multicast validation remains Linux
+loopback only. No throughput or format recommendation follows from image sizes.
 
-## Remaining gates and limits
+## Next: Phase 5, preserving the pending bench gates
 
-No board was attached or flashed. Physical Ethernet/IGMP/TTL/checksum behavior,
-hardware RNG, DHCP/link recovery, signed boot and stack high-water are unverified.
-The [bench checklist](SMOKE_BENCH.md) remains pending until actual evidence is
-recorded. Host tests use Linux loopback; other desktop OS multicast behavior and
-two physical receiver machines still need testing.
-
-The smoke image publishes only Protobuf. The complete MCU command/response
-service and per-encoding firmware variants remain Phase 4. CRC stays off until
-Phase 5. Do not present the host test rates or image size as a controlled
-three-format performance comparison.
-
-## Next: Phase 4, with the Phase 3 bench gate retained
-
-Integrate the complete read-command service and both publishers into a dedicated
-NUCLEO application for each encoding, keep independent bounded work, finish
-signing/boot confirmation and recovery integration, and measure actual resource
-use. Run and record the physical Phase 3 multicast smoke test when a bench is
-available; its gate is not waived by continuing implementation.
+Add fixed-per-run CRC-32C with independent vectors and corruption/failure demos.
+Keep the exact existing wire body and bounded transport rules, verify CRC before
+decoding, and extend shared host/board paths and diagnostics. CRC remains off in
+this phase. Run the physical Phase 3/4 acceptance procedure when bench access is
+available; continuing implementation does not waive it.

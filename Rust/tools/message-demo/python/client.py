@@ -176,11 +176,23 @@ def main():
         "--commands", nargs="+", choices=COMMANDS, default=list(COMMANDS)
     )
     parser.add_argument("--repeat", type=int, default=1)
+    parser.add_argument(
+        "--interval",
+        type=float,
+        default=0,
+        help="seconds between completed command attempts",
+    )
     parser.add_argument("--timeout", type=float, default=1.0)
     parser.add_argument("--log", help="JSONL path (default: stdout)")
     args = parser.parse_args()
-    if args.repeat < 1 or not 0 < args.timeout < float("inf"):
-        parser.error("repeat and timeout must be positive and finite")
+    if (
+        args.repeat < 1
+        or not 0 < args.timeout < float("inf")
+        or not 0 <= args.interval < float("inf")
+    ):
+        parser.error(
+            "repeat/timeout must be positive; interval must be nonnegative and finite"
+        )
     endpoint = (socket.gethostbyname(args.host), args.port)
     output = open(args.log, "w", encoding="utf-8") if args.log else sys.stdout
     succeeded = True
@@ -195,6 +207,7 @@ def main():
                 device_id=args.device,
             )
             client = Client(sock, endpoint, args.format, args.device, args.timeout, log)
+            remaining = args.repeat * len(args.commands)
             for _ in range(args.repeat):
                 for command in args.commands:
                     response = client.request(command)
@@ -210,6 +223,9 @@ def main():
                             file=sys.stderr,
                         )
                         succeeded &= response["kind"] != 14
+                    remaining -= 1
+                    if remaining and args.interval:
+                        time.sleep(args.interval)
     except (OSError, CodecError) as error:
         print(f"client: {error}", file=sys.stderr)
         succeeded = False
