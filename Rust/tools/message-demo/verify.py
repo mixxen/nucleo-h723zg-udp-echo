@@ -1,4 +1,4 @@
-"""Run the same Phase 2 gates locally and in CI, from any working directory."""
+"""Run the portable Phase 2/3 gates locally and in CI, from any working directory."""
 
 import os
 from pathlib import Path
@@ -80,7 +80,21 @@ env = dict(
         / ("message-demo.exe" if os.name == "nt" else "message-demo")
     ),
 )
+run(
+    [
+        "cargo",
+        TOOLCHAIN,
+        "test",
+        "--locked",
+        "--manifest-path",
+        RUST / "messaging/Cargo.toml",
+        "--target",
+        host,
+        "--lib",
+    ]
+)
 run([sys.executable, HERE / "test_demo.py"], env=env)
+run([sys.executable, HERE / "test_multicast.py"], env=env)
 # Run from the repository root so the existing firmware's link.x/defmt.x configuration
 # is not inherited. This is a link-only portable-codec probe, not a board image.
 run(
@@ -102,5 +116,5 @@ run(
     ]
 )
 print(
-    "Phase 2 host, generation, formatting, lint, and ARM no-allocator link gates passed."
+    "Phase 2/3 host, multicast, generation, lint, and ARM no-allocator link gates passed. Board smoke gates run separately with the firmware toolchain."
 )

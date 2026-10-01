@@ -240,7 +240,7 @@ class CodecTests(unittest.TestCase):
 
 
 @contextlib.contextmanager
-def server(format, sample="valid"):
+def server(format, sample="valid", extra=()):
     with tempfile.TemporaryDirectory() as temp:
         path = Path(temp) / "server.jsonl"
         with open(Path(temp) / "stderr", "w+") as stderr:
@@ -256,6 +256,7 @@ def server(format, sample="valid"):
                     sample,
                     "--log",
                     str(path),
+                    *extra,
                 ],
                 stdout=subprocess.DEVNULL,
                 stderr=stderr,
@@ -266,9 +267,16 @@ def server(format, sample="valid"):
                     if process.poll() is not None:
                         stderr.seek(0)
                         raise AssertionError(stderr.read())
-                    lines = path.read_text().splitlines() if path.exists() else []
-                    if lines:
-                        ready = json.loads(lines[0])
+                    lines = path.read_text().split("\n")[:-1] if path.exists() else []
+                    ready = next(
+                        (
+                            event
+                            for event in map(json.loads, lines)
+                            if event["outcome"] == "ready"
+                        ),
+                        None,
+                    )
+                    if ready:
                         break
                     time.sleep(0.01)
                 else:
@@ -330,9 +338,17 @@ class NetworkTests(unittest.TestCase):
                 health = client.request("health")
                 self.assertEqual(health["health"]["rejected_datagrams"], 3)
                 self.assertEqual(health["health"]["received_requests"], 4)
-                events = [
-                    json.loads(line) for line in path.read_text().split("\n")[:-1]
-                ]
+                deadline = time.monotonic() + 2
+                while True:
+                    events = [
+                        json.loads(line) for line in path.read_text().split("\n")[:-1]
+                    ]
+                    if any(event["outcome"] == "size_error" for event in events):
+                        break
+                    self.assertLess(
+                        time.monotonic(), deadline, "queued log was not written"
+                    )
+                    time.sleep(0.01)
                 self.assertIn("size_error", [event["outcome"] for event in events])
                 rejected = next(
                     event for event in events if event["outcome"] == "size_error"
@@ -399,7 +415,12 @@ class NetworkTests(unittest.TestCase):
             )
             health = client.request("health")
             self.assertEqual(health["health"]["rejected_datagrams"], 30)
-            self.assertIn('"error_rate_limited"', path.read_text())
+            deadline = time.monotonic() + 2
+            while '"error_rate_limited"' not in path.read_text():
+                self.assertLess(
+                    time.monotonic(), deadline, "queued log was not written"
+                )
+                time.sleep(0.01)
 
     def test_python_cli_all_formats_and_unavailable(self):
         for format in codec.FORMATS:

@@ -44,7 +44,7 @@ class EventLog:
             revision=revision(),
             protocol_version=1,
             crc="off",
-            role="client",
+            role=metadata.pop("role", "client"),
             **metadata,
         )
 

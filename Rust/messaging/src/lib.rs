@@ -2,6 +2,7 @@
 #![no_std]
 pub mod cells;
 mod csv;
+pub mod schedule;
 pub mod validation;
 #[allow(nonstandard_style, unused, clippy::all)]
 mod protobuf_generated {

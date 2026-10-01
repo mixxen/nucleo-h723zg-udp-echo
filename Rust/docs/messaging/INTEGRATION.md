@@ -100,8 +100,8 @@ Do not run the throughput benchmark and treat its echo results as schema evidenc
 
 ## Remaining implementation checks
 
-- Micropb generator version/accessor layout and bounded storage configuration.
-- Narrow CSV/JSON adapter; no production code generation has been implemented.
+- Phase 2 resolved generator/accessor/codec gates; Phase 3 links the portable crate
+  into a publisher-only smoke image. The complete firmware resource budget is pending.
 - Board hardware RNG integration for boot IDs; source API and boot-time error path.
 - Send cancellation/try-send semantics, timer fairness and queue accounting.
 - Packet reception after switch membership aging, NIC changes, and link recovery.
@@ -109,3 +109,17 @@ Do not run the throughput benchmark and treat its echo results as schema evidenc
   before checksum offload may appear invalid).
 
 These are explicit Phase 2–4 gates, not claims of passing hardware tests.
+
+## Phase 3 implementation update
+
+The [smoke image](SMOKE_BENCH.md) uses three socket slots (DHCP and two TX-only
+publishers), zero RX queues, one TX payload slot per stream, TTL 1 and nonblocking
+`try_send_to`. Shared scheduling advances through missed slots without a catch-up
+burst. The hardware RNG's fallible async fill supplies a fresh boot nonce; driver
+initialization/recovery behavior remains a physical gate.
+
+Portable `heapless` is pinned at 0.9.3 to match the existing Embassy requirement.
+The upstream revisions are unchanged. A local stable 1.98.1 build, lint, and
+disposable-key signed-image verification passed. The original five-socket plan
+above still applies to the complete Phase 4 command/stream application, not this
+publisher-only smoke image. See CHECKPOINT.md for observed results and pending gates.

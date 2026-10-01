@@ -3,7 +3,7 @@
 This phase gives you a Rust UDP responder and a Python client for the same three
 read commands in CSV, JSON, and Protobuf. It runs on your computer; no board,
 SSH key, bootloader, or signing key is needed. Each process uses one explicitly
-selected format. CRC is off. Multicast publishing starts in Phase 3.
+selected format. CRC is off. See [Phase 3](PHASE3.md) for multicast publishing and listeners.
 
 ## Set up and verify
 
