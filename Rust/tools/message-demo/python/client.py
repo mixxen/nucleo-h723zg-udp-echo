@@ -61,6 +61,7 @@ class EventLog:
             raw_length=raw_length,
             message=message,
             monotonic_ms=(time.monotonic() - self.started) * 1000,
+            host_monotonic_ns=time.monotonic_ns(),
             unix_ms=time.time_ns() // 1_000_000,
             **extra,
         )

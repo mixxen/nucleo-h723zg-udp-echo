@@ -1,0 +1,7 @@
+comparison_id,mode,format,crc,instrumented,duration_seconds,requests,successes,timeouts,error_responses,missing_terminal_events,success_percent,attempted_command_hz,planned_command_slots,unattempted_command_slots,scheduled_slots_missed,rtt_p50_ms,rtt_p95_ms,rtt_p99_ms,rtt_max_ms,data_valid,all_commands_succeeded,both_listeners_received_both_streams
+88353af2b7574e67,host,json,off,False,60.0,60,60,0,0,0,100.0,1.0,60,0,0,0.2754404995357618,0.467894053508644,0.5707042578433174,0.589457995374687,True,True,True
+29aa500059897e9c,host,csv,off,False,60.0,60,60,0,0,0,100.0,1.0,60,0,0,0.27328699798090383,0.4571047498757251,0.5413245485397054,0.5792939991806634,True,True,True
+81bc63cc2a1d0822,host,json,on,False,60.0,60,60,0,0,0,100.0,1.0,60,0,0,0.4537580025498755,0.6724482042045562,1.8974587684351631,3.4110429987777025,True,True,True
+33395d65527e7608,host,protobuf,on,False,60.0,60,60,0,0,0,100.0,1.0,60,0,0,0.3387690012459643,0.6169497060909629,1.1564620615536105,1.3073049995000474,True,True,True
+98e94d2bdfac50f0,host,csv,on,False,60.0,60,60,0,0,0,100.0,1.0,60,0,0,0.40568300028098747,0.5631979020108702,0.617753047699807,0.647904998913873,True,True,True
+580eb0d5e0b22c5a,host,protobuf,off,False,60.0,60,60,0,0,0,100.0,1.0,60,0,0,0.24916650363593362,0.4300916451029476,1.0114867916854526,1.6503500010003336,True,True,True

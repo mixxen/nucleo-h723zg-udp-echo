@@ -1,4 +1,4 @@
-"""Run the portable Phase 2/3/4 portable gates locally and in CI, from any working directory."""
+"""Run the portable messaging gates locally and in CI, from any working directory."""
 
 import os
 from pathlib import Path
@@ -96,6 +96,7 @@ run(
 run([sys.executable, HERE / "test_demo.py"], env=env)
 run([sys.executable, HERE / "test_multicast.py"], env=env)
 run([sys.executable, HERE / "test_crc.py"], env=env)
+run([sys.executable, HERE / "test_compare.py"], env=env)
 # Run from the repository root so the existing firmware's link.x/defmt.x configuration
 # is not inherited. This is a link-only portable-codec probe, not a board image.
 run(

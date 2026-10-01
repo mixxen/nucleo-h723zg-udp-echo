@@ -12,6 +12,7 @@ use std::{
     time::{Duration, Instant},
 };
 
+mod benchmark;
 mod log;
 mod streams;
 use log::Log;
@@ -292,6 +293,7 @@ fn codec_operation(input: Value) -> std::result::Result<Value, &'static str> {
 fn main() -> Result<()> {
     let mut args = std::env::args().skip(1);
     match args.next().as_deref() {
+        Some("bench") => benchmark::run(args.collect()),
         Some("codec")=>{
             for line in io::stdin().lock().lines() {
                 let result=serde_json::from_str(&line?).map_err(|_|"decode_error").and_then(codec_operation);
@@ -307,6 +309,6 @@ fn main() -> Result<()> {
             }
             serve(options)
         },
-        _=>Err("Usage: message-demo serve --format csv|json|protobuf [--crc off|on] [--bind 127.0.0.1:42000] [--device board-01] [--sample valid|unavailable|fault] [--log run.jsonl] [--multicast-interface IPv4 --group 239.255.42.1 --status-port 42001 --health-port 42002 --status-hz 10 --health-hz 1]\n       message-demo codec  (JSONL fixture runner on stdin/stdout)".into()),
+        _=>Err("Usage: message-demo serve --format csv|json|protobuf [--crc off|on] [--bind 127.0.0.1:42000] [--device board-01] [--sample valid|unavailable|fault] [--log run.jsonl] [--multicast-interface IPv4 --group 239.255.42.1 --status-port 42001 --health-port 42002 --status-hz 10 --health-hz 1]\n       message-demo codec  (JSONL fixture runner on stdin/stdout)\n       message-demo bench ITERATIONS BATCHES  (JSONL fixed fixtures; batch timing)".into()),
     }
 }
