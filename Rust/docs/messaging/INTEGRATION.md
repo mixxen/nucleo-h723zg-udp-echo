@@ -140,3 +140,14 @@ confirmation and optional profiling; it does not add SSH/updating or an allocato
 See [Phase 4](PHASE4.md) for measured linked storage, exact run commands and the
 physical acceptance checklist. Static RAM is 28,348 bytes in the local baseline
 builds; runtime stack high-water, signed boot and physical delivery remain pending.
+
+
+## Phase 5 framing and diagnostics
+
+The full messaging application now adds optional CRC-32C in the existing
+1024-byte datagram buffers; the 10,240-byte payload budget is unchanged. The
+CRC-specific count remains a diagnostic alongside the unchanged health schema.
+Only messaging images force nonblocking RTT; the smoke/echo/managed variants keep
+their established logging settings. `verify_board.py` now builds/signs all six
+format/CRC combinations and preserves distinct artifacts. See [Phase 5](PHASE5.md)
+for current resource measurements and physical fault gates still awaiting a bench.

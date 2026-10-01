@@ -716,4 +716,6 @@ Existing echo, management and benchmark instructions above still describe the av
 The [Phase 4 NUCLEO walkthrough](docs/messaging/PHASE4.md) provides the complete
 read-command and multicast application, one encoding per image, signing/flash
 selectors, build resource measurements, and trial/recovery bench procedures.
-Physical Phase 3/4 gates remain pending; CRC is scheduled for Phase 5.
+Physical Phase 3/4 gates remain pending. The [Phase 5 walkthrough](docs/messaging/PHASE5.md)
+adds optional CRC-32C, request and stream fault demos, and verification of all six
+format/CRC configurations. Board fault testing remains pending.

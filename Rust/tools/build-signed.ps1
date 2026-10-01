@@ -9,6 +9,7 @@ param(
     [switch]$MulticastSmoke,
     [ValidateSet("", "csv", "json", "protobuf")]
     [string]$Messaging = "",
+    [switch]$Crc,
     [switch]$W5500,
     [switch]$W5500Offload,
     [switch]$Benchmark,
@@ -24,6 +25,9 @@ $artifacts = Join-Path $projectRoot "artifacts"
 $privateKey = Join-Path $repositoryRoot "Bootloader\root-ed25519.pem"
 $imgtool = Join-Path $ZephyrWorkspace ".venv313\Scripts\imgtool.exe"
 $objcopy = Join-Path $ZephyrSdk "gnu\arm-zephyr-eabi\bin\arm-zephyr-eabi-objcopy.exe"
+if ($Crc -and -not $Messaging) {
+    throw "-Crc requires -Messaging csv|json|protobuf."
+}
 $variantCount = @($NativeUdp, $W5500, $W5500Offload, $MulticastSmoke, [bool]$Messaging).Where({ $_ }).Count
 if ($variantCount -gt 1) {
     throw "Choose only one of -NativeUdp, -W5500, -W5500Offload, -MulticastSmoke, or -Messaging csv|json|protobuf."
@@ -61,6 +65,7 @@ $binaryName = if ($Messaging) {
     "nucleo-h723zg-udp-echo"
 }
 $artifactPrefix = if ($Messaging) { "firmware-messaging-$Messaging" } elseif ($MulticastSmoke) { "firmware-multicast-smoke" } elseif ($W5500Offload) { "firmware-w5500-offload" } elseif ($W5500) { "firmware-w5500" } elseif ($NativeUdp) { "firmware-native-udp" } else { "firmware" }
+if ($Crc) { $artifactPrefix += "-crc" }
 if ($Profiling) {
     $artifactPrefix += "-profiling"
 } elseif ($Performance) {
@@ -87,6 +92,7 @@ try {
     $cargoArguments = @("build", "--locked", "--profile", $cargoProfile)
     if ($NativeUdp -or $W5500 -or $W5500Offload -or $MulticastSmoke -or $Messaging) {
         $feature = if ($Messaging) { "messaging-$Messaging" } elseif ($MulticastSmoke) { "multicast-smoke" } elseif ($W5500Offload) { "wiznet-offload" } elseif ($W5500) { "wiznet" } else { "native-udp" }
+        if ($Crc) { $feature += ",messaging-crc" }
         if ($Profiling) {
             $feature += ",profiling"
         } elseif ($Performance) {

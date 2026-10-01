@@ -95,6 +95,7 @@ run(
 )
 run([sys.executable, HERE / "test_demo.py"], env=env)
 run([sys.executable, HERE / "test_multicast.py"], env=env)
+run([sys.executable, HERE / "test_crc.py"], env=env)
 # Run from the repository root so the existing firmware's link.x/defmt.x configuration
 # is not inherited. This is a link-only portable-codec probe, not a board image.
 run(
@@ -116,5 +117,5 @@ run(
     ]
 )
 print(
-    "Host, multicast, command policy, generation, lint, and ARM no-allocator link gates passed. Run verify_board.py separately for the Phase 4 firmware."
+    "Host, multicast, command policy, generation, lint, and ARM no-allocator link gates passed. Run verify_board.py separately for the six Phase 5 firmware configurations."
 )

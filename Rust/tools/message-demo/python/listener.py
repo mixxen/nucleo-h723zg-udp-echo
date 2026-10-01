@@ -9,7 +9,8 @@ import socket
 import struct
 import sys
 import time
-from codec import CodecError, FORMATS, decode
+from codec import CodecError, FORMATS
+from framing import CRC_MODES, decode
 from client import EventLog
 from stream_state import DeviceStreams
 
@@ -59,6 +60,7 @@ def receive(sock):
 def main():
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--format", choices=FORMATS, required=True)
+    parser.add_argument("--crc", choices=CRC_MODES, default="off")
     parser.add_argument(
         "--interface",
         required=True,
@@ -130,6 +132,7 @@ def main():
         output,
         role="listener",
         format=args.format,
+        crc=args.crc,
         interface=args.interface,
         group=args.group,
         status_port=args.status_port,
@@ -164,7 +167,7 @@ def main():
             selector.register(sock, selectors.EVENT_READ, (port, kind))
         log.event("ready")
         print(
-            f"Listening: {args.group} on {args.interface} / {args.format} / TTL expected 1",
+            f"Listening: {args.group} on {args.interface} / {args.format} / CRC {args.crc} / TTL expected 1",
             file=sys.stderr,
         )
         for device in devices:
@@ -199,7 +202,7 @@ def main():
                     log.event("wrong_peer_or_destination", peer, len(data), **details)
                     continue
                 try:
-                    message = decode(args.format, data)
+                    message = decode(args.format, data, args.crc)
                 except CodecError as error:
                     log.event(
                         error.outcome,

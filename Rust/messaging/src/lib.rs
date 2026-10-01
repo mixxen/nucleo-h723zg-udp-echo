@@ -4,6 +4,7 @@
 pub mod cells;
 #[cfg(feature = "csv")]
 mod csv;
+pub mod framing;
 pub mod schedule;
 pub mod service;
 pub mod validation;
@@ -27,6 +28,7 @@ use serde::Deserialize;
 pub use model::MAX_BODY;
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum CodecError {
+    Crc,
     Decode,
     Validation,
     Version,
@@ -35,6 +37,7 @@ pub enum CodecError {
 impl CodecError {
     pub fn outcome(self) -> &'static str {
         match self {
+            Self::Crc => "crc_error",
             Self::Decode => "decode_error",
             Self::Validation => "validation_error",
             Self::Version => "version_error",

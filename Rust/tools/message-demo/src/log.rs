@@ -1,13 +1,13 @@
 //! A slow terminal/file cannot block a publisher: the bounded queue drops diagnostics.
 use crate::{Result, nonce, revision};
-use messaging_codec::{Format, model::Envelope};
+use messaging_codec::{Format, framing::CrcMode, model::Envelope};
 use serde_json::{Value, json};
 use std::{
     fs::File,
     io::{self, Write},
     sync::{
         Arc,
-        atomic::{AtomicU64, Ordering},
+        atomic::{AtomicU32, AtomicU64, Ordering},
         mpsc::{SyncSender, sync_channel},
     },
     time::{Instant, SystemTime, UNIX_EPOCH},
@@ -16,19 +16,21 @@ use std::{
 pub struct Log {
     sender: SyncSender<Value>,
     dropped: Arc<AtomicU64>,
+    crc_rejections: Arc<AtomicU32>,
     metadata: Value,
     start: Instant,
 }
 impl Log {
     pub fn new(
         path: Option<&String>,
-        format: Format,
+        wire: (Format, CrcMode),
         local: String,
         interface: String,
         device: &str,
         boot: &str,
         start: Instant,
     ) -> Result<Self> {
+        let (format, crc) = wire;
         let mut output: Box<dyn Write + Send> = match path {
             Some(path) => Box::new(File::create(path)?),
             None => Box::new(io::stdout()),
@@ -50,10 +52,11 @@ impl Log {
                     // block command processing any more than a slow JSONL consumer.
                     if event["outcome"] == "ready" {
                         eprintln!(
-                            "Ready: {} / {} / {} (CRC off)",
+                            "Ready: {} / {} / {} (CRC {})",
                             event["local_endpoint"].as_str().unwrap_or("?"),
                             event["format"].as_str().unwrap_or("?"),
-                            event["device_id"].as_str().unwrap_or("?")
+                            event["device_id"].as_str().unwrap_or("?"),
+                            event["crc"].as_str().unwrap_or("?")
                         );
                     } else if event["outcome"] == "sent_response"
                         || (event["outcome"] == "send_error"
@@ -73,8 +76,9 @@ impl Log {
         Ok(Self {
             sender,
             dropped: Arc::new(AtomicU64::new(0)),
+            crc_rejections: Arc::new(AtomicU32::new(0)),
             start,
-            metadata: json!({"run_id":nonce()?,"revision":revision(),"protocol_version":1,"format":format.name(),"crc":"off","role":"responder","local_endpoint":local,"interface":interface,"device_id":device,"boot_id":boot}),
+            metadata: json!({"run_id":nonce()?,"revision":revision(),"protocol_version":1,"format":format.name(),"crc":crc.name(),"role":"responder","local_endpoint":local,"interface":interface,"device_id":device,"boot_id":boot}),
         })
     }
     pub fn publisher(
@@ -100,7 +104,16 @@ impl Log {
         message: Option<&Envelope>,
         rejected: Option<&[u8]>,
     ) -> io::Result<()> {
+        // Count before enqueueing: dropped diagnostic records do not erase the counter.
+        if outcome == "crc_error" {
+            let _ = self
+                .crc_rejections
+                .fetch_update(Ordering::Relaxed, Ordering::Relaxed, |n| {
+                    Some(n.saturating_add(1))
+                });
+        }
         let mut event = self.metadata.clone();
+        event["crc_rejections"] = json!(self.crc_rejections.load(Ordering::Relaxed));
         event["outcome"] = json!(outcome);
         event["peer"] = json!(peer);
         event["raw_length"] = json!(length);

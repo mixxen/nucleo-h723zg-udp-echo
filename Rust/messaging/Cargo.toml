@@ -11,6 +11,7 @@ json = ["dep:serde-json-core"]
 protobuf = ["dep:micropb"]
 
 [dependencies]
+crc = { version = "=3.3.0", default-features = false }
 micropb = { optional = true, version = "=0.6.0", default-features = false, features = ["container-heapless-0-9", "encode", "decode"] }
 heapless = { version = "=0.9.3", features = ["serde"] }
 serde = { version = "=1.0.228", default-features = false, features = ["derive"] }

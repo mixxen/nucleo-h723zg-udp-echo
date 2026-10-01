@@ -1,6 +1,7 @@
 //! Host transport and diagnostics. The bounded wire implementation lives in messaging-codec.
+use messaging_codec::framing::{self, CrcMode, MAX_DATAGRAM};
 use messaging_codec::service::{CommandPolicy, Decision};
-use messaging_codec::{CodecError, Format, MAX_BODY, decode, encode, model::*, parse, validation};
+use messaging_codec::{CodecError, Format, model::*, validation};
 use serde_json::{Value, json};
 use std::{
     collections::BTreeMap,
@@ -67,6 +68,8 @@ fn serve(options: BTreeMap<String, String>) -> Result<()> {
             .ok_or("--format csv|json|protobuf is required")?,
     )
     .ok_or("invalid format")?;
+    let crc = CrcMode::parse(options.get("crc").map(String::as_str).unwrap_or("off"))
+        .ok_or("--crc must be off|on")?;
     let bind = options
         .get("bind")
         .map(String::as_str)
@@ -111,7 +114,7 @@ fn serve(options: BTreeMap<String, String>) -> Result<()> {
     let publishers = streams::Publisher::configure(&options, local.port())?;
     let log = Log::new(
         options.get("log"),
-        format,
+        (format, crc),
         local.to_string(),
         local.ip().to_string(),
         device,
@@ -121,7 +124,7 @@ fn serve(options: BTreeMap<String, String>) -> Result<()> {
     let counters = Arc::new(Mutex::new(Counters::default()));
     for publisher in publishers {
         publisher.start(
-            format,
+            (format, crc),
             template.clone(),
             status.clone(),
             counters.clone(),
@@ -133,7 +136,7 @@ fn serve(options: BTreeMap<String, String>) -> Result<()> {
     let mut policy = CommandPolicy::new(0);
     // Full UDP receive buffer lets logs record the actual oversize length on hosts.
     let mut input = [0; 65535];
-    let mut output = [0; MAX_BODY];
+    let mut output = [0; MAX_DATAGRAM];
     loop {
         let (length, peer) = match socket.recv_from(&mut input) {
             Ok(received) => received,
@@ -142,7 +145,7 @@ fn serve(options: BTreeMap<String, String>) -> Result<()> {
                 return Err(error.into());
             }
         };
-        let request = match parse(format, &input[..length]) {
+        let request = match framing::parse(format, crc, &input[..length]) {
             Ok(message) => message,
             Err(error) => {
                 {
@@ -226,7 +229,8 @@ fn serve(options: BTreeMap<String, String>) -> Result<()> {
             14 => response.error = Some(messaging_codec::model::Error { code: error }),
             _ => unreachable!(),
         }
-        let length = encode(format, &response, &mut output).map_err(|e| e.outcome())?;
+        let length =
+            framing::encode(format, crc, &response, &mut output).map_err(|e| e.outcome())?;
         let outcome = match socket.send_to(&output[..length], peer) {
             Ok(n) if n == length => "sent_response",
             _ => {
@@ -250,6 +254,12 @@ fn serve(options: BTreeMap<String, String>) -> Result<()> {
 fn codec_operation(input: Value) -> std::result::Result<Value, &'static str> {
     let format =
         Format::parse(input["format"].as_str().ok_or("decode_error")?).ok_or("decode_error")?;
+    let crc = match input.get("crc") {
+        None => CrcMode::Off,
+        Some(value) => {
+            CrcMode::parse(value.as_str().ok_or("validation_error")?).ok_or("validation_error")?
+        }
+    };
     match input["operation"].as_str() {
         Some("decode") => {
             let text = input["hex"].as_str().ok_or("decode_error")?;
@@ -261,14 +271,15 @@ fn codec_operation(input: Value) -> std::result::Result<Value, &'static str> {
                 .map(|i| u8::from_str_radix(&text[i..i + 2], 16))
                 .collect::<std::result::Result<Vec<_>, _>>()
                 .map_err(|_| "decode_error")?;
-            let message = decode(format, &bytes).map_err(CodecError::outcome)?;
+            let message = framing::decode(format, crc, &bytes).map_err(CodecError::outcome)?;
             Ok(json!({"message":message}))
         }
         Some("encode") => {
             let message: Envelope =
                 serde_json::from_value(input["message"].clone()).map_err(|_| "decode_error")?;
-            let mut output = [0; MAX_BODY];
-            let length = encode(format, &message, &mut output).map_err(CodecError::outcome)?;
+            let mut output = [0; MAX_DATAGRAM];
+            let length =
+                framing::encode(format, crc, &message, &mut output).map_err(CodecError::outcome)?;
             let hex: String = output[..length]
                 .iter()
                 .map(|byte| format!("{byte:02x}"))
@@ -291,11 +302,11 @@ fn main() -> Result<()> {
         Some("serve")=>{
             let mut options=BTreeMap::new();
             while let Some(flag)=args.next() {
-                let key=flag.strip_prefix("--").filter(|key|matches!(*key,"format"|"bind"|"device"|"sample"|"log"|"multicast-interface"|"group"|"status-port"|"health-port"|"status-hz"|"health-hz")).ok_or("unknown flag")?;
+                let key=flag.strip_prefix("--").filter(|key|matches!(*key,"format"|"crc"|"bind"|"device"|"sample"|"log"|"multicast-interface"|"group"|"status-port"|"health-port"|"status-hz"|"health-hz")).ok_or("unknown flag")?;
                 if options.insert(key.to_owned(),args.next().ok_or("missing flag value")?).is_some(){return Err("duplicate flag".into());}
             }
             serve(options)
         },
-        _=>Err("Usage: message-demo serve --format csv|json|protobuf [--bind 127.0.0.1:42000] [--device board-01] [--sample valid|unavailable|fault] [--log run.jsonl] [--multicast-interface IPv4 --group 239.255.42.1 --status-port 42001 --health-port 42002 --status-hz 10 --health-hz 1]\n       message-demo codec  (JSONL fixture runner on stdin/stdout)".into()),
+        _=>Err("Usage: message-demo serve --format csv|json|protobuf [--crc off|on] [--bind 127.0.0.1:42000] [--device board-01] [--sample valid|unavailable|fault] [--log run.jsonl] [--multicast-interface IPv4 --group 239.255.42.1 --status-port 42001 --health-port 42002 --status-hz 10 --health-hz 1]\n       message-demo codec  (JSONL fixture runner on stdin/stdout)".into()),
     }
 }

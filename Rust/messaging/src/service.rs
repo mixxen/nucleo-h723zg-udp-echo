@@ -78,6 +78,7 @@ impl CommandPolicy {
 pub struct Counters {
     pub received: u32,
     pub rejected: u32,
+    pub crc_rejections: u32,
     pub send_errors: u32,
     pub skipped: u32,
     pub active: [bool; 3],
@@ -87,6 +88,7 @@ impl Counters {
         Self {
             received: 0,
             rejected: 0,
+            crc_rejections: 0,
             send_errors: 0,
             skipped: 0,
             active: [false; 3],

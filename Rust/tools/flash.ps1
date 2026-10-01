@@ -8,6 +8,7 @@ param(
     [switch]$MulticastSmoke,
     [ValidateSet("", "csv", "json", "protobuf")]
     [string]$Messaging = "",
+    [switch]$Crc,
     [switch]$W5500,
     [switch]$W5500Offload,
     [switch]$Benchmark,
@@ -20,6 +21,9 @@ $Messaging = $Messaging.ToLowerInvariant()
 $projectRoot = Split-Path -Parent $PSScriptRoot
 $repositoryRoot = Split-Path -Parent $projectRoot
 
+if ($Crc -and -not $Messaging) {
+    throw "-Crc requires -Messaging csv|json|protobuf."
+}
 $variantCount = @($NativeUdp, $W5500, $W5500Offload, $MulticastSmoke, [bool]$Messaging).Where({ $_ }).Count
 if ($variantCount -gt 1) {
     throw "Choose only one of -NativeUdp, -W5500, -W5500Offload, -MulticastSmoke, or -Messaging csv|json|protobuf."
@@ -53,6 +57,7 @@ if (-not $SkipBuild) {
         -NativeUdp:$NativeUdp `
         -MulticastSmoke:$MulticastSmoke `
         -Messaging $Messaging `
+        -Crc:$Crc `
         -W5500:$W5500 `
         -W5500Offload:$W5500Offload `
         -Benchmark:$Benchmark `
@@ -76,6 +81,9 @@ $signedApplicationName = if ($Messaging) {
     "firmware-native-udp-signed.bin"
 } else {
     "firmware-signed.bin"
+}
+if ($Crc) {
+    $signedApplicationName = $signedApplicationName.Replace("-signed.bin", "-crc-signed.bin")
 }
 if ($Profiling) {
     $signedApplicationName = $signedApplicationName.Replace("-signed.bin", "-profiling-signed.bin")

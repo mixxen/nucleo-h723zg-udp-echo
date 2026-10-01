@@ -1,6 +1,11 @@
 //! Rebuild each comparison image with the same settings. Wire format is a feature.
 use embassy_net::Ipv4Address;
-use messaging_codec::Format;
+use messaging_codec::{Format, framing::CrcMode};
+pub const CRC: CrcMode = if cfg!(feature = "messaging-crc") {
+    CrcMode::On
+} else {
+    CrcMode::Off
+};
 pub const DEVICE_ID: &str = "board-01";
 pub const FIRMWARE_VERSION: &str = "messaging-0.1.0";
 pub const COMMAND_PORT: u16 = 42000;

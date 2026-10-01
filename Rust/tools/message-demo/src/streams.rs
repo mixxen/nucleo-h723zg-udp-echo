@@ -1,6 +1,7 @@
 use crate::{Counters, Log, Result};
 use messaging_codec::{
-    Format, MAX_BODY, encode,
+    Format,
+    framing::{CrcMode, MAX_DATAGRAM, encode},
     model::{Envelope, Status},
     schedule::Schedule,
 };
@@ -102,13 +103,14 @@ impl Publisher {
     }
     pub fn start(
         self,
-        format: Format,
+        wire: (Format, CrcMode),
         template: Envelope,
         status: Status,
         counters: Arc<Mutex<Counters>>,
         log: Log,
         start: Instant,
     ) -> io::Result<()> {
+        let (format, crc) = wire;
         let stream = if self.kind == 21 { "status" } else { "health" };
         let log = log.publisher(
             self.socket.local_addr()?.to_string(),
@@ -120,7 +122,7 @@ impl Publisher {
             .name(format!("publish-{stream}"))
             .spawn(move || {
                 let mut schedule = Schedule::new(self.period_ms, 0).unwrap();
-                let mut bytes = [0; MAX_BODY];
+                let mut bytes = [0; MAX_DATAGRAM];
                 loop {
                     let now = start.elapsed().as_millis() as u64;
                     let Some(due) = schedule.take_due(now) else {
@@ -149,7 +151,7 @@ impl Publisher {
                             message.health = Some(shared.health());
                         }
                     }
-                    let length = match encode(format, &message, &mut bytes) {
+                    let length = match encode(format, crc, &message, &mut bytes) {
                         Ok(length) => length,
                         Err(_) => {
                             let mut shared = counters.lock().unwrap();

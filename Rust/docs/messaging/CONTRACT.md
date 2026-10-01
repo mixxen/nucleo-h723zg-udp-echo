@@ -189,8 +189,22 @@ CRC-32C/Castagnoli: polynomial 0x1EDC6F41 (reflected 0x82F63B78), init 0xFFFFFFF
 refin/refout true, xorout 0xFFFFFFFF. Check `123456789` -> E3069283; empty -> 00000000.
 The trailer is the conventional 32-bit result rendered most significant hex digit
 first. Protect every body byte, including metadata and CSV CRLF; exclude trailer.
-CRC is accidental-error detection, not authentication. Phase 5 implements it;
-Phase 1 freezes the representation so size comparisons include its eight bytes.
+CRC is accidental-error detection, not authentication. Phase 5 implements this
+frozen representation; size comparisons include its eight bytes. No message
+schema field, CSV column or CRC-off body encoding changes for CRC support.
+
+Reject over-limit datagrams as `size_error` before CRC work. In CRC-on mode,
+short/missing or non-uppercase-hex trailers and mismatches are `crc_error`; do
+not decode or answer those packets. A correctly framed empty body proceeds to
+`decode_error`. After integrity passes, existing decode/validation/version rules
+apply. Peer/destination filtering and socket truncation checks remain transport
+responsibilities. Modes are configured, not inferred from received bytes.
+
+CRC rejection counts are a subset of health `rejected_datagrams`. The separate
+saturating `crc_rejections` diagnostic is exposed in receiver JSONL and rate-limited
+MCU RTT output, not added to the frozen health schema. A bad-CRC publication
+cannot update sequence/session history or freshness. See [Phase 5](PHASE5.md)
+for executable fault demonstrations and the pending physical gates.
 
 ## Scheduling, freshness and logging
 

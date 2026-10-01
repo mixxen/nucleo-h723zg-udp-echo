@@ -16,9 +16,9 @@ use embassy_net::{
 };
 use embassy_time::{Duration, Instant, Timer, with_timeout};
 use messaging_codec::{
-    MAX_BODY, decode, encode,
+    CodecError,
+    framing::{decode, encode, parse},
     model::*,
-    parse,
     schedule::Schedule,
     service::{CommandPolicy, Counters, Decision},
 };
@@ -95,7 +95,7 @@ pub fn self_check(boot: &heapless::String<16>) -> bool {
     if !GROUP.is_multicast() {
         return false;
     }
-    let mut bytes = [0; MAX_BODY];
+    let mut bytes = [0; DATAGRAM_CAPACITY];
     let mut policy = CommandPolicy::new(0);
     for kind in 1..=3 {
         let mut request = Envelope {
@@ -111,10 +111,10 @@ pub fn self_check(boot: &heapless::String<16>) -> bool {
             2 => request.get_status = Some(Empty {}),
             _ => request.get_health = Some(Empty {}),
         }
-        let Ok(n) = encode(FORMAT, &request, &mut bytes) else {
+        let Ok(n) = encode(FORMAT, CRC, &request, &mut bytes) else {
             return false;
         };
-        let Ok(decoded) = decode(FORMAT, &bytes[..n]) else {
+        let Ok(decoded) = decode(FORMAT, CRC, &bytes[..n]) else {
             return false;
         };
         if decoded != request
@@ -124,18 +124,25 @@ pub fn self_check(boot: &heapless::String<16>) -> bool {
         }
         if encode(
             FORMAT,
+            CRC,
             &response(boot, decoded.clone(), None, 0),
             &mut bytes,
         )
         .is_err()
-            || encode(FORMAT, &response(boot, decoded, Some(2), 0), &mut bytes).is_err()
+            || encode(
+                FORMAT,
+                CRC,
+                &response(boot, decoded, Some(2), 0),
+                &mut bytes,
+            )
+            .is_err()
         {
             return false;
         }
     }
     [21, 22]
         .iter()
-        .all(|kind| encode(FORMAT, &publication(boot, *kind, 0, 0), &mut bytes).is_ok())
+        .all(|kind| encode(FORMAT, CRC, &publication(boot, *kind, 0, 0), &mut bytes).is_ok())
 }
 fn ready(stack: Stack<'_>) -> bool {
     stack.is_link_up() && stack.is_config_up()
@@ -195,10 +202,15 @@ pub async fn commands(stack: Stack<'static>, boot: heapless::String<16>) -> ! {
             counters(|c| c.rejected = c.rejected.saturating_add(1));
             continue;
         }
-        let request = match parse(FORMAT, &input[..length]) {
+        let request = match parse(FORMAT, CRC, &input[..length]) {
             Ok(request) => request,
-            Err(_) => {
-                counters(|c| c.rejected = c.rejected.saturating_add(1));
+            Err(error) => {
+                counters(|c| {
+                    c.rejected = c.rejected.saturating_add(1);
+                    if error == CodecError::Crc {
+                        c.crc_rejections = c.crc_rejections.saturating_add(1);
+                    }
+                });
                 continue;
             }
         };
@@ -215,7 +227,7 @@ pub async fn commands(stack: Stack<'static>, boot: heapless::String<16>) -> ! {
             Decision::Ignore | Decision::RateLimited => continue,
         };
         let reply = response(&boot, request, error, Instant::now().as_millis());
-        let Ok(length) = encode(FORMAT, &reply, &mut output) else {
+        let Ok(length) = encode(FORMAT, CRC, &reply, &mut output) else {
             counters(|c| c.active[0] = true);
             continue;
         };
@@ -258,6 +270,8 @@ pub async fn publish(
     socket.set_hop_limit(Some(1));
     let mut schedule = Schedule::new(period_ms, Instant::now().as_millis()).unwrap();
     let index = (kind - 20) as usize;
+    let mut reported_crc_rejections = 0;
+    let mut next_crc_report_ms = 0;
     STARTED.fetch_or(1 << (index + 1), Ordering::Release);
     loop {
         let deadline = Timer::at(Instant::from_millis(schedule.next_ms()));
@@ -275,6 +289,16 @@ pub async fn publish(
         let Some(due) = schedule.take_due(now) else {
             continue;
         };
+        // CRC-specific counts stay out of the frozen health schema. Emit at most
+        // once per second, on the health task, and only when the count changed.
+        if kind == 22 && now >= next_crc_report_ms {
+            next_crc_report_ms = now.saturating_add(1000);
+            let count = counters(|c| c.crc_rejections);
+            if count != reported_crc_rejections {
+                defmt::warn!("crc_rejections={}", count);
+                reported_crc_rejections = count;
+            }
+        }
         counters(|c| {
             c.skip(due.skipped);
             if due.skipped > 0 {
@@ -292,7 +316,7 @@ pub async fn publish(
             unwrap!(socket.bind(port));
         }
         let message = publication(&boot, kind, due.sequence, now);
-        let Ok(length) = encode(FORMAT, &message, &mut output) else {
+        let Ok(length) = encode(FORMAT, CRC, &message, &mut output) else {
             counters(|c| {
                 c.skip(1);
                 c.active[index] = true;
