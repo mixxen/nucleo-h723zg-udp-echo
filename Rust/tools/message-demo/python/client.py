@@ -8,7 +8,8 @@ import socket
 import subprocess
 import sys
 import time
-from codec import CodecError, FORMATS, decode, encode
+from codec import CodecError, FORMATS
+from framing import CRC_MODES, decode, encode
 
 COMMANDS = {
     "info": (1, "get_device_info"),
@@ -39,19 +40,23 @@ class EventLog:
     def __init__(self, output, **metadata):
         self.output = output
         self.started = time.monotonic()
+        self.crc_rejections = 0
         self.metadata = dict(
             run_id=nonce(),
             revision=revision(),
             protocol_version=1,
-            crc="off",
+            crc=metadata.pop("crc", "off"),
             role=metadata.pop("role", "client"),
             **metadata,
         )
 
     def event(self, outcome, peer=None, raw_length=0, message=None, **extra):
+        if outcome == "crc_error":
+            self.crc_rejections = min(2**32 - 1, self.crc_rejections + 1)
         record = dict(
             self.metadata,
             outcome=outcome,
+            crc_rejections=self.crc_rejections,
             peer=peer,
             raw_length=raw_length,
             message=message,
@@ -67,8 +72,12 @@ class EventLog:
 
 
 class Client:
-    def __init__(self, sock, endpoint, format, device, timeout, log):
+    def __init__(self, sock, endpoint, format, device, timeout, log, crc="off"):
         self.sock, self.endpoint, self.format = sock, endpoint, format
+        if crc not in CRC_MODES:
+            raise ValueError("CRC mode must be off or on")
+        self.crc = crc
+        log.metadata["crc"] = crc
         self.device, self.timeout, self.log = device, timeout, log
         self.session, self.request_id = nonce(), 0
         self.history = deque(maxlen=64)
@@ -86,7 +95,7 @@ class Client:
             request_id=self.request_id,
             **{body: {}},
         )
-        wire = encode(self.format, message)
+        wire = encode(self.format, message, self.crc)
         started = time.monotonic()
         try:
             self.sock.sendto(wire, self.endpoint)
@@ -121,7 +130,7 @@ class Client:
                 self.log.event("wrong_peer", peer, len(data))
                 continue
             try:
-                response = decode(self.format, data)
+                response = decode(self.format, data, self.crc)
             except CodecError as error:
                 self.log.event(
                     error.outcome, peer, len(data), raw_prefix_hex=data[:64].hex()
@@ -164,6 +173,7 @@ class Client:
 def main():
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--format", choices=FORMATS, required=True)
+    parser.add_argument("--crc", choices=CRC_MODES, default="off")
     parser.add_argument("--host", default="127.0.0.1")
     parser.add_argument("--port", type=int, default=42000)
     parser.add_argument(
@@ -202,11 +212,14 @@ def main():
             log = EventLog(
                 output,
                 format=args.format,
+                crc=args.crc,
                 local_endpoint=sock.getsockname(),
                 interface=args.bind,
                 device_id=args.device,
             )
-            client = Client(sock, endpoint, args.format, args.device, args.timeout, log)
+            client = Client(
+                sock, endpoint, args.format, args.device, args.timeout, log, args.crc
+            )
             remaining = args.repeat * len(args.commands)
             for _ in range(args.repeat):
                 for command in args.commands:

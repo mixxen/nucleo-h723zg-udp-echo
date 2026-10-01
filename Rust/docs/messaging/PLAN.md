@@ -1,7 +1,7 @@
 # Network Messaging Prototype: Phased Implementation Plan
 
 Date: 2026-09-30  
-Status: Original six-phase plan; Phases 1 and 2 are delivered; Phases 3 and 4 implementation/build work is delivered, with physical multicast and MCU acceptance gates pending. See [current checkpoint](CHECKPOINT.md).
+Status: Original six-phase plan; Phases 1 and 2 are delivered; Phases 3 through 5 implementation/build work is delivered, with physical multicast and MCU acceptance gates pending. See [current checkpoint](CHECKPOINT.md).
 
 Repository: https://github.com/mixxen/nucleo-h723zg-udp-echo  
 Reviewed baseline: `b009dc08eca171083a4a52385d3583b3b3154d0b`

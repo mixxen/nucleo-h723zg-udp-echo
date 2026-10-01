@@ -68,10 +68,11 @@ async fn main(spawner: Spawner) -> ! {
         core::future::pending::<()>().await;
     }
     info!(
-        "messaging: device={} boot={} format={} crc=off",
+        "messaging: device={} boot={} format={} crc={}",
         DEVICE_ID,
         boot.as_str(),
-        FORMAT.name()
+        FORMAT.name(),
+        CRC.name()
     );
     info!(
         "ports command={} status={} health={} group={} ttl=1",

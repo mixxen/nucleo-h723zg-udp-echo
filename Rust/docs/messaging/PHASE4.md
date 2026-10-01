@@ -4,6 +4,9 @@
 pending.** Base: merged Phase 3, `4a431b8` (PR #3). No board was attached or flashed.
 The earlier Phase 3 physical multicast gate remains open.
 
+Phase 5 adds [optional CRC and fault demos](PHASE5.md); the measurements and
+CRC-off baseline below record the Phase 4 implementation.
+
 ## What runs on the board
 
 `nucleo-h723zg-native-rmii-messaging` uses the existing native RMII interface,

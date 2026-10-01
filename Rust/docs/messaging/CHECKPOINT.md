@@ -1,68 +1,74 @@
-# Phase 4 checkpoint
+# Phase 5 checkpoint
 
-Date: 2026-10-01 UTC. Base: merged Phase 3, `4a431b8` (PR #3).
-Phase 3's Messaging prototype and Rust CI workflows both passed before this work.
+Date: 2026-10-01 UTC. Base: merged Phase 4, `deb811c` (PR #4).
+Phase 4's Messaging prototype and Rust CI workflows passed before this work.
 
-**Implementation and local verification complete. Physical Phase 3/4 gates pending.**
+**Implementation and local verification complete. Physical Phase 3/4/5 gates pending.**
 
 ## Delivered
 
-- Dedicated native-RMII messaging image with read commands and independent status
-  and health publishers. Fixed buffers, short counter critical sections, explicit
-  receive-loop yielding, bounded local sends, and queue clearing on observed
-  link/configuration loss or local timeout.
-- One CSV, JSON or Protobuf codec enabled per image. Default host builds still
-  contain all three. Generated conversions honor those features reproducibly.
-- Portable command acceptance/error/drop policy shared by the host and MCU,
-  including the bounded error-reply budget and independent saturating health state.
-- Hardware boot nonce, local codec/task/timer checkpoint, verified MCUboot trial
-  confirmation, deliberate rollback-test variant, and optional existing profiling.
-- Network supervisor recovery when a cable is removed during DHCP or an IPv4
-  configuration disappears while link remains up. Application readiness checks
-  use a 10 ms timer so tasks do not contend for the pinned stack's single state
-  wake slot; optional profiling uses this approach at startup too.
-- `-Messaging csv|json|protobuf` signing/factory-flash selectors; separate artifact
-  names for formats, profiling and rollback-test images.
-- Paced Python command demo, profiling snapshot tool, firmware verification script,
-  CI build/package/resource gates, and [complete Phase 4 walkthrough](PHASE4.md).
+- Optional CRC-32C framing for all three formats across Rust host, Python
+  client/listener, and full NUCLEO command/stream application. Exactly eight
+  uppercase hex characters follow the unchanged encoded body; modes are fixed
+  per run with no auto-detection or fallback.
+- Size checks before CRC, CRC before decoding, and common decode/validation/
+  version outcomes. No CRC error replies and no freshness/history updates from
+  rejected publications. Existing correlation, schedules and bounds remain.
+- Saturating CRC rejection diagnostics in receiver logs and rate-limited MCU RTT;
+  CRC failures also contribute to the existing aggregate rejected count in health.
+  The schema, CSV columns and CRC-off bodies are unchanged.
+- Messaging images force nonblocking RTT to keep diagnostics from stalling tasks.
+- `--crc off|on` host options, `messaging-crc` firmware feature and `-Crc` signing/
+  factory-flash selectors with distinct artifacts.
+- Finite request/stream fault tools, independent published CRC vectors,
+  cross-language/framing/failure tests, and a six-configuration board package gate.
+- [Phase 5 walkthrough](PHASE5.md) with host demos, precise diagnostic meaning,
+  board procedure, local measurements, and pending acceptance work.
 
 ## Verification performed locally
 
-- Portable `verify.py`: generation/reproducibility, formatting, host and ARM lint,
-  link without an allocator, five Rust tests, and all 18 Python command/codec/
-  multicast groups passed with Rust 1.90.0. Existing two-listener tests still pass
-  in every format while commands continue.
-- `verify_board.py`: all three release images built and passed Clippy with
-  warnings denied on Rust 1.98.1. Cargo metadata confirms exactly one codec feature
-  per image. Protobuf profiling and rollback variants built/linted; missing or
-  multiple firmware formats were rejected.
-- Disposable-key imgtool 2.4.0 signing and verification passed for every format.
-  Signed bytes: CSV 116,712; JSON 120,224; Protobuf 78,712. All fit the 262,144-byte
-  limit. Linked static RAM is 28,348 bytes in each baseline image. Section/symbol
-  reports distinguish task/DMA/network storage from unmeasured runtime stack use.
-- Existing native UDP echo release build and Protobuf smoke Clippy passed after
-  the supervisor/feature changes. No upstream dependency revision changed.
+- Rust 1.90.0 portable gates: reproducible generation, formatting, host/ARM lint,
+  eight Rust tests, and ARM linking without an allocator while both CRC modes and
+  all three codecs remain reachable.
+- All 27 Python test groups passed: the earlier 18 codec/command/multicast groups
+  plus nine CRC/fault groups. The two-listener command/restart test now runs all
+  six format/CRC configurations. Fault tests verify receiver outcomes and valid
+  traffic afterward, not silence alone.
+- CRC tests check published vectors independently in Rust and Python, mutation of
+  body/trailer bytes, boundary lengths, exact body preservation, malformed input
+  with a valid CRC, semantic/version failures, CRC-protected error replies,
+  delayed/duplicate response correlation, and stale/recovered stream behavior.
+- Rust 1.98.1: all six ARM release images built and passed Clippy. Disposable-key
+  imgtool 2.4.0 signing/verification passed; signed sizes range from 78,544 bytes
+  (Protobuf/off) to 121,368 bytes (JSON/on), below 262,144 bytes. Static RAM is
+  28,368 bytes per baseline image; runtime stack high-water is not measured.
+- CRC-enabled profiling and rollback-test variants built/linted. Exact single
+  codec selection and invalid multi-format rejection are still checked.
 
-PowerShell runtime and GitHub CI results are separate from local Linux checks.
-The workflow retains PowerShell syntax checking and builds the existing smoke image.
+Rust adds pinned `crc` 3.3.0 and locked `crc-catalog` 2.5.0. Python CRC uses an
+independent bitwise implementation. Embassy/network revisions are unchanged.
+PowerShell execution and GitHub CI are separate from these local Linux checks.
 
-## Pending physical gates
+## Remaining gates
 
-No board was attached or flashed. Signed factory/trial boot, actual MCU command
-responses and two physical multicast receivers in each format, UDP checksum/TTL/
-IGMP behavior, DHCP fallback and reconnect, hardware RNG, reset identities, trial
-confirmation/rollback, and stack high-water still require bench evidence.
+No board was attached or flashed. Physical command/multicast delivery in six
+configurations, CRC counter behavior, UDP checksum/TTL/IGMP observations, signed
+boot/trial confirmation/rollback, hardware RNG, cable/DHCP recovery and stack
+high-water remain pending. Existing Phase 3/4 acceptance checklists still apply.
+Host multicast evidence is Linux loopback only; Windows/macOS remain unverified.
 
-The [Phase 4 acceptance checklist](PHASE4.md#physical-acceptance-record) carries
-those gates; [Phase 3's physical multicast checklist](SMOKE_BENCH.md) remains open.
-Local queue draining is not receiver acknowledgment, and application counters do
-not see packets dropped below the socket. Host multicast validation remains Linux
-loopback only. No throughput or format recommendation follows from image sizes.
+CRC is accidental-error detection, not authentication. Application counters do
+not observe lower-layer drops. The separate CRC count is diagnostic, not a new
+health wire field. RTT can discard records; host logging queues can drop records
+while retaining cumulative counts. Fault tools' recovery success does not by
+itself prove which rejection occurred at the receiver.
 
-## Next: Phase 5, preserving the pending bench gates
+## Next: Phase 6
 
-Add fixed-per-run CRC-32C with independent vectors and corruption/failure demos.
-Keep the exact existing wire body and bounded transport rules, verify CRC before
-decoding, and extend shared host/board paths and diagnostics. CRC remains off in
-this phase. Run the physical Phase 3/4 acceptance procedure when bench access is
-available; continuing implementation does not waive it.
+Create the controlled comparison runner, statistical exports, and walkthrough for
+three encodings by two CRC modes. Measure like-for-like packet sizes, command
+success/RTT, publication rates, gaps/freshness, encode/decode cost, flash/static RAM
+and available stack high-water. Keep host versus MCU and instrumented versus
+baseline results distinct. No format recommendation or physical success claim
+follows from build sizes alone. Bench-dependent rows stay pending until real
+measurements are supplied or a board becomes available.

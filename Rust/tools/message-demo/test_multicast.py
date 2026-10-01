@@ -3,6 +3,7 @@
 import contextlib
 import copy
 import io
+import itertools
 import json
 import os
 from pathlib import Path
@@ -70,7 +71,7 @@ def options(status, health):
 
 
 @contextlib.contextmanager
-def listener_process(format, status, health, path):
+def listener_process(format, status, health, path, crc="off", device="board-01"):
     with open(str(path) + ".stderr", "w") as error:
         process = subprocess.Popen(
             [
@@ -78,6 +79,10 @@ def listener_process(format, status, health, path):
                 str(HERE / "python/listener.py"),
                 "--format",
                 format,
+                "--crc",
+                crc,
+                "--device",
+                device,
                 "--interface",
                 INTERFACE,
                 "--status-port",
@@ -181,17 +186,23 @@ class TrackingTests(unittest.TestCase):
 )
 class MulticastTests(unittest.TestCase):
     def test_two_listeners_while_commands_continue(self):
-        for format in FORMATS:
+        for format, crc in itertools.product(FORMATS, ("off", "on")):
             status, health = ports()
-            with self.subTest(format=format), tempfile.TemporaryDirectory() as temp:
+            with self.subTest(
+                format=format, crc=crc
+            ), tempfile.TemporaryDirectory() as temp:
                 first, second = Path(temp) / "first.jsonl", Path(temp) / "second.jsonl"
-                with listener_process(format, status, health, first), listener_process(
-                    format, status, health, second
-                ):
-                    with server(format, extra=options(status, health)) as (
+                with listener_process(
+                    format, status, health, first, crc
+                ), listener_process(format, status, health, second, crc):
+                    with server(
+                        format, extra=(*options(status, health), "--crc", crc)
+                    ) as (
                         endpoint,
                         server_log,
-                    ), socket.socket(socket.AF_INET, socket.SOCK_DGRAM) as sock:
+                    ), socket.socket(
+                        socket.AF_INET, socket.SOCK_DGRAM
+                    ) as sock:
                         sock.bind((INTERFACE, 0))
                         output = io.StringIO()
                         client = Client(
@@ -201,6 +212,7 @@ class MulticastTests(unittest.TestCase):
                             "board-01",
                             1,
                             EventLog(output, format=format),
+                            crc,
                         )
                         # Prove publication is independent of commands and listener acknowledgement.
                         wait_until(
@@ -224,6 +236,7 @@ class MulticastTests(unittest.TestCase):
                                 if e["outcome"] == "accepted_publication"
                             ]
                             for event in accepted:
+                                self.assertEqual(event["crc"], crc)
                                 self.assertEqual(
                                     event["peer"][1],
                                     status if event["kind"] == 21 else health,
@@ -263,7 +276,7 @@ class MulticastTests(unittest.TestCase):
                             == {21, 22}
                         )
                     # A reboot is a new session, not a giant sequence gap or a false recovery of old data.
-                    with server(format, extra=options(status, health)):
+                    with server(format, extra=(*options(status, health), "--crc", crc)):
                         for path in (first, second):
                             wait_until(
                                 lambda: any(

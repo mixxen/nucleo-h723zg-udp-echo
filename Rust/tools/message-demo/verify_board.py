@@ -5,6 +5,7 @@ llvm-tools, and imgtool 2.4.0 in this Python environment. Never flashes a board.
 The temporary key is disposable and cannot sign for the provisioned bootloader.
 """
 
+import itertools
 import json
 from pathlib import Path
 import re
@@ -65,7 +66,6 @@ def main():
         "compiler": capture(["rustc", "+stable", "--version"]),
         "target": TARGET,
         "profile": "release",
-        "crc": "off",
         "hardware_tested": False,
         "images": [],
     }
@@ -73,8 +73,13 @@ def main():
     with tempfile.TemporaryDirectory(prefix="messaging-sign-") as temporary:
         key = Path(temporary) / "ci-ed25519.pem"
         run(imgtool + ["keygen", "--key", key, "--type", "ed25519"])
-        for encoding in ("csv", "json", "protobuf"):
-            features = "messaging-" + encoding
+        for encoding, crc in itertools.product(
+            ("csv", "json", "protobuf"), ("off", "on")
+        ):
+            label = f"{encoding}-{crc}"
+            features = (
+                "messaging-" + encoding + (",messaging-crc" if crc == "on" else "")
+            )
             metadata = json.loads(
                 capture(
                     [
@@ -101,10 +106,10 @@ def main():
             assert enabled == [encoding], f"Unexpected codec features: {enabled}"
             run(cargo("clippy", features) + ["--", "-D", "warnings"])
             run(cargo("build", features))
-            elf = ARTIFACTS / f"{encoding}.elf"
+            elf = ARTIFACTS / f"{label}.elf"
             shutil.copyfile(RUST / "target" / TARGET / "release" / BINARY, elf)
-            unsigned = ARTIFACTS / f"{encoding}-unsigned.bin"
-            signed = ARTIFACTS / f"{encoding}-ci-signed.bin"
+            unsigned = ARTIFACTS / f"{label}-unsigned.bin"
+            signed = ARTIFACTS / f"{label}-ci-signed.bin"
             run([llvm / "llvm-objcopy", "-O", "binary", elf, unsigned])
             run(
                 imgtool
@@ -132,7 +137,7 @@ def main():
             run(imgtool + ["verify", "--key", key, signed])
             assert signed.stat().st_size <= 262144, "Signed image exceeds MCUboot limit"
             sections = capture([llvm / "llvm-size", "-A", elf])
-            (ARTIFACTS / f"{encoding}-sections.txt").write_text(sections + "\n")
+            (ARTIFACTS / f"{label}-sections.txt").write_text(sections + "\n")
             ram = sum(
                 int(size)
                 for _, size, address in re.findall(
@@ -150,10 +155,11 @@ def main():
                     elf,
                 ]
             )
-            (ARTIFACTS / f"{encoding}-symbols.txt").write_text(symbols + "\n")
+            (ARTIFACTS / f"{label}-symbols.txt").write_text(symbols + "\n")
             report["images"].append(
                 {
                     "encoding": encoding,
+                    "crc": crc,
                     "codec_features": enabled,
                     "unsigned_bytes": unsigned.stat().st_size,
                     "signed_bytes": signed.stat().st_size,
@@ -163,8 +169,11 @@ def main():
             )
     # Instrumented and deliberately unconfirmed builds stay outside the baseline size table.
     for extra in ("profiling", "rollback-test"):
-        run(cargo("clippy", "messaging-protobuf," + extra) + ["--", "-D", "warnings"])
-        run(cargo("build", "messaging-protobuf," + extra))
+        run(
+            cargo("clippy", "messaging-protobuf,messaging-crc," + extra)
+            + ["--", "-D", "warnings"]
+        )
+        run(cargo("build", "messaging-protobuf,messaging-crc," + extra))
     # An ambiguous firmware image must fail before it can be packaged.
     for invalid in ("messaging", "messaging-csv,messaging-json"):
         result = subprocess.run(
