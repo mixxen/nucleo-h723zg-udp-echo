@@ -1,4 +1,5 @@
 //! Host transport and diagnostics. The bounded wire implementation lives in messaging-codec.
+use messaging_codec::service::{CommandPolicy, Decision};
 use messaging_codec::{CodecError, Format, MAX_BODY, decode, encode, model::*, parse, validation};
 use serde_json::{Value, json};
 use std::{
@@ -56,25 +57,6 @@ impl Counters {
             rejected_datagrams: Some(self.rejected),
             send_errors: Some(self.send_errors),
             skipped_publications: Some(self.skipped),
-        }
-    }
-}
-// Token bucket limits error replies only; read commands are never retried by the service.
-struct ErrorBudget {
-    tokens: f64,
-    updated: Instant,
-}
-impl ErrorBudget {
-    fn take(&mut self) -> bool {
-        let now = Instant::now();
-        self.tokens =
-            (self.tokens + now.duration_since(self.updated).as_secs_f64() * 10.0).min(10.0);
-        self.updated = now;
-        if self.tokens < 1.0 {
-            false
-        } else {
-            self.tokens -= 1.0;
-            true
         }
     }
 }
@@ -148,10 +130,7 @@ fn serve(options: BTreeMap<String, String>) -> Result<()> {
         )?;
     }
     log.event("ready", None, 0, None, None)?;
-    let mut budget = ErrorBudget {
-        tokens: 10.0,
-        updated: Instant::now(),
-    };
+    let mut policy = CommandPolicy::new(0);
     // Full UDP receive buffer lets logs record the actual oversize length on hosts.
     let mut input = [0; 65535];
     let mut output = [0; MAX_BODY];
@@ -180,33 +159,27 @@ fn serve(options: BTreeMap<String, String>) -> Result<()> {
                 continue;
             }
         };
-        let validity = validation::validate(&request, format);
-        let is_request = matches!(request.kind, Some(1..=3));
-        let target = request.device_id == template.device_id;
-        let accepted = validity.is_ok() && is_request && target;
-        let error = if accepted {
-            None
-        } else {
+        let assessment =
+            policy.assess(&request, format, device, start.elapsed().as_millis() as u64);
+        let accepted = assessment.decision == Decision::Accept;
+        if let Some(rejection) = assessment.rejection {
             {
                 let mut shared = counters.lock().unwrap();
                 shared.rejected = shared.rejected.saturating_add(1);
             }
-            let outcome = validity.err().unwrap_or(CodecError::Validation).outcome();
             log.event(
-                outcome,
+                rejection.outcome(),
                 Some(peer.to_string()),
                 length,
                 Some(&request),
                 Some(&input[..length]),
             )?;
-            // Never answer a response/publication, bad version, wrong target, or uncorrelatable input.
-            if !target
-                || !validation::correlation(&request)
-                || matches!(request.kind, Some(11..=14 | 21 | 22))
-            {
-                continue;
-            }
-            if !budget.take() {
+        }
+        let error = match assessment.decision {
+            Decision::Accept => None,
+            Decision::Error(code) => Some(code),
+            Decision::Ignore => continue,
+            Decision::RateLimited => {
                 log.event(
                     "error_rate_limited",
                     Some(peer.to_string()),
@@ -216,11 +189,6 @@ fn serve(options: BTreeMap<String, String>) -> Result<()> {
                 )?;
                 continue;
             }
-            Some(if request.kind.is_some() && !is_request {
-                1
-            } else {
-                2
-            })
         };
         if accepted {
             {

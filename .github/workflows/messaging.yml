@@ -5,6 +5,10 @@ on:
     paths:
       - 'Rust/Cargo.*'
       - 'Rust/src/bin/native_rmii_multicast_smoke.rs'
+      - 'Rust/src/bin/native_rmii_messaging.rs'
+      - 'Rust/src/servers/**'
+      - 'Rust/src/boot_confirmation.rs'
+      - 'Rust/src/profiling.rs'
       - 'Rust/src/bringup/**'
       - 'Rust/src/board.rs'
       - 'Rust/tools/build-signed.ps1'
@@ -17,6 +21,10 @@ on:
     paths:
       - 'Rust/Cargo.*'
       - 'Rust/src/bin/native_rmii_multicast_smoke.rs'
+      - 'Rust/src/bin/native_rmii_messaging.rs'
+      - 'Rust/src/servers/**'
+      - 'Rust/src/boot_confirmation.rs'
+      - 'Rust/src/profiling.rs'
       - 'Rust/src/bringup/**'
       - 'Rust/src/board.rs'
       - 'Rust/tools/build-signed.ps1'
@@ -79,3 +87,24 @@ jobs:
           imgtool sign --key "$RUNNER_TEMP/smoke-ci.pem" --align 32 --max-align 32 --header-size 0x200 --pad-header --slot-size 0x60000 --max-sectors 4 --version 0.0.0+0 artifacts/smoke-unsigned.bin artifacts/smoke-ci-signed.bin
           imgtool verify --key "$RUNNER_TEMP/smoke-ci.pem" artifacts/smoke-ci-signed.bin
           test "$(stat -c%s artifacts/smoke-ci-signed.bin)" -le 262144
+
+  board-messaging:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v6
+      - uses: dtolnay/rust-toolchain@stable
+        with:
+          components: clippy, llvm-tools, rustfmt
+          targets: thumbv7em-none-eabihf
+      - uses: actions/setup-python@v6
+        with:
+          python-version: '3.12'
+      - run: python -m pip install imgtool==2.4.0
+      - run: python Rust/tools/message-demo/verify_board.py
+      - uses: actions/upload-artifact@v4
+        with:
+          name: messaging-resources
+          path: |
+            Rust/artifacts/messaging/resources.json
+            Rust/artifacts/messaging/*-sections.txt
+            Rust/artifacts/messaging/*-symbols.txt

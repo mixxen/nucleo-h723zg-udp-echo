@@ -123,3 +123,20 @@ The upstream revisions are unchanged. A local stable 1.98.1 build, lint, and
 disposable-key signed-image verification passed. The original five-socket plan
 above still applies to the complete Phase 4 command/stream application, not this
 publisher-only smoke image. See CHECKPOINT.md for observed results and pending gates.
+
+
+## Phase 4 implementation
+
+The dedicated `native_rmii_messaging.rs` binary now realizes the five-socket
+budget above. `embassy_messaging.rs` uses the 10,240-byte payload budget, empty
+publisher RX queues, separate tasks, bounded local queue draining and observed
+link/configuration loss to close stale queues. The command policy is shared with
+the host responder. Codec Cargo features compile only one wire format per image.
+
+The shared supervisor now also cancels DHCP waiting on cable loss and restarts
+when IPv4 configuration disappears. Existing echo/smoke builds are checked for
+regressions. The complete messaging image adds its own verified MCUboot trial
+confirmation and optional profiling; it does not add SSH/updating or an allocator.
+See [Phase 4](PHASE4.md) for measured linked storage, exact run commands and the
+physical acceptance checklist. Static RAM is 28,348 bytes in the local baseline
+builds; runtime stack high-water, signed boot and physical delivery remain pending.

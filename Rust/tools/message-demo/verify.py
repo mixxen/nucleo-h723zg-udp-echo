@@ -1,4 +1,4 @@
-"""Run the portable Phase 2/3 gates locally and in CI, from any working directory."""
+"""Run the portable Phase 2/3/4 portable gates locally and in CI, from any working directory."""
 
 import os
 from pathlib import Path
@@ -116,5 +116,5 @@ run(
     ]
 )
 print(
-    "Phase 2/3 host, multicast, generation, lint, and ARM no-allocator link gates passed. Board smoke gates run separately with the firmware toolchain."
+    "Host, multicast, command policy, generation, lint, and ARM no-allocator link gates passed. Run verify_board.py separately for the Phase 4 firmware."
 )

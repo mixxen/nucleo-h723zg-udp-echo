@@ -1,19 +1,25 @@
-//! Portable, bounded codecs shared by the host demo and future firmware.
+//! Portable, bounded codecs shared by the host demo and firmware.
 #![no_std]
+#[cfg(feature = "csv")]
 pub mod cells;
+#[cfg(feature = "csv")]
 mod csv;
 pub mod schedule;
+pub mod service;
 pub mod validation;
+#[cfg(feature = "protobuf")]
 #[allow(nonstandard_style, unused, clippy::all)]
 mod protobuf_generated {
     include!("generated/protobuf.rs");
 }
+#[cfg(feature = "protobuf")]
 pub use protobuf_generated::messaging_::v1_ as pb;
 // Generated conversions deliberately assign fields one at a time.
 #[allow(clippy::field_reassign_with_default, clippy::let_and_return)]
 pub mod model {
     include!("generated/model.rs");
 }
+#[cfg(feature = "protobuf")]
 use micropb::{MessageDecode, MessageEncode, PbEncoder};
 use model::Envelope;
 use serde::Deserialize;
@@ -81,8 +87,11 @@ pub fn parse(format: Format, bytes: &[u8]) -> Result<Envelope, CodecError> {
     if bytes.len() > MAX_BODY {
         return Err(CodecError::Size);
     }
+    #[allow(unreachable_patterns)]
     match format {
+        #[cfg(feature = "csv")]
         Format::Csv => csv::decode(bytes),
+        #[cfg(feature = "json")]
         Format::Json => {
             // serde-json-core accepts literal controls inside strings; JSON requires escaping.
             let (mut in_string, mut escaped) = (false, false);
@@ -112,6 +121,7 @@ pub fn parse(format: Format, bytes: &[u8]) -> Result<Envelope, CodecError> {
             }
             Ok(message)
         }
+        #[cfg(feature = "protobuf")]
         Format::Protobuf => {
             let mut message = pb::Envelope::default();
             message
@@ -119,6 +129,7 @@ pub fn parse(format: Format, bytes: &[u8]) -> Result<Envelope, CodecError> {
                 .map_err(|_| CodecError::Decode)?;
             Ok(Envelope::from_pb(message))
         }
+        _ => Err(CodecError::Decode),
     }
 }
 pub fn decode(format: Format, bytes: &[u8]) -> Result<Envelope, CodecError> {
@@ -140,9 +151,13 @@ pub fn encode(format: Format, message: &Envelope, out: &mut [u8]) -> Result<usiz
     normalize(&mut normalized);
     let capacity = out.len().min(MAX_BODY);
     let out = &mut out[..capacity];
+    #[allow(unreachable_patterns)]
     match format {
+        #[cfg(feature = "csv")]
         Format::Csv => csv::encode(&normalized, out),
+        #[cfg(feature = "json")]
         Format::Json => serde_json_core::to_slice(&normalized, out).map_err(|_| CodecError::Size),
+        #[cfg(feature = "protobuf")]
         Format::Protobuf => {
             let proto = normalized.to_pb();
             let mut encoder = PbEncoder::new(heapless::Vec::<u8, MAX_BODY>::new());
@@ -154,5 +169,6 @@ pub fn encode(format: Format, message: &Envelope, out: &mut [u8]) -> Result<usiz
             out[..bytes.len()].copy_from_slice(bytes);
             Ok(bytes.len())
         }
+        _ => Err(CodecError::Validation),
     }
 }

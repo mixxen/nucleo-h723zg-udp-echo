@@ -7,6 +7,8 @@ param(
     [switch]$RollbackTest,
     [switch]$NativeUdp,
     [switch]$MulticastSmoke,
+    [ValidateSet("", "csv", "json", "protobuf")]
+    [string]$Messaging = "",
     [switch]$W5500,
     [switch]$W5500Offload,
     [switch]$Benchmark,
@@ -15,18 +17,19 @@ param(
 )
 
 $ErrorActionPreference = "Stop"
+$Messaging = $Messaging.ToLowerInvariant()
 $projectRoot = Split-Path -Parent $PSScriptRoot
 $repositoryRoot = Split-Path -Parent $projectRoot
 $artifacts = Join-Path $projectRoot "artifacts"
 $privateKey = Join-Path $repositoryRoot "Bootloader\root-ed25519.pem"
 $imgtool = Join-Path $ZephyrWorkspace ".venv313\Scripts\imgtool.exe"
 $objcopy = Join-Path $ZephyrSdk "gnu\arm-zephyr-eabi\bin\arm-zephyr-eabi-objcopy.exe"
-$variantCount = @($NativeUdp, $W5500, $W5500Offload, $MulticastSmoke).Where({ $_ }).Count
+$variantCount = @($NativeUdp, $W5500, $W5500Offload, $MulticastSmoke, [bool]$Messaging).Where({ $_ }).Count
 if ($variantCount -gt 1) {
-    throw "Choose only one of -NativeUdp, -W5500, -W5500Offload, or -MulticastSmoke."
+    throw "Choose only one of -NativeUdp, -W5500, -W5500Offload, -MulticastSmoke, or -Messaging csv|json|protobuf."
 }
 if (($NativeUdp -or $W5500 -or $W5500Offload -or $MulticastSmoke) -and $RollbackTest) {
-    throw "-RollbackTest applies only to the managed native Ethernet firmware."
+    throw "-RollbackTest applies only to managed or messaging firmware."
 }
 if ($MulticastSmoke -and ($Benchmark -or $Profiling -or $Performance)) {
     throw "-MulticastSmoke uses its fixed Phase 3 bench configuration."
@@ -34,8 +37,8 @@ if ($MulticastSmoke -and ($Benchmark -or $Profiling -or $Performance)) {
 if ($Benchmark -and -not ($NativeUdp -or $W5500 -or $W5500Offload)) {
     throw "-Benchmark requires -NativeUdp, -W5500, or -W5500Offload."
 }
-if ($Profiling -and -not ($NativeUdp -or $W5500 -or $W5500Offload)) {
-    throw "-Profiling requires -NativeUdp, -W5500, or -W5500Offload."
+if ($Profiling -and -not ($NativeUdp -or $W5500 -or $W5500Offload -or $Messaging)) {
+    throw "-Profiling requires -NativeUdp, -W5500, -W5500Offload, or -Messaging."
 }
 if ($Performance -and -not ($NativeUdp -or $W5500 -or $W5500Offload)) {
     throw "-Performance requires -NativeUdp, -W5500, or -W5500Offload."
@@ -44,7 +47,9 @@ if ($Performance -and ($Profiling -or $Benchmark)) {
     throw "-Performance already disables packet logging; do not combine it with -Benchmark or -Profiling."
 }
 
-$binaryName = if ($MulticastSmoke) {
+$binaryName = if ($Messaging) {
+    "nucleo-h723zg-native-rmii-messaging"
+} elseif ($MulticastSmoke) {
     "nucleo-h723zg-native-rmii-multicast-smoke"
 } elseif ($W5500Offload) {
     "nucleo-h723zg-w5500-offload-udp-echo"
@@ -55,7 +60,7 @@ $binaryName = if ($MulticastSmoke) {
 } else {
     "nucleo-h723zg-udp-echo"
 }
-$artifactPrefix = if ($MulticastSmoke) { "firmware-multicast-smoke" } elseif ($W5500Offload) { "firmware-w5500-offload" } elseif ($W5500) { "firmware-w5500" } elseif ($NativeUdp) { "firmware-native-udp" } else { "firmware" }
+$artifactPrefix = if ($Messaging) { "firmware-messaging-$Messaging" } elseif ($MulticastSmoke) { "firmware-multicast-smoke" } elseif ($W5500Offload) { "firmware-w5500-offload" } elseif ($W5500) { "firmware-w5500" } elseif ($NativeUdp) { "firmware-native-udp" } else { "firmware" }
 if ($Profiling) {
     $artifactPrefix += "-profiling"
 } elseif ($Performance) {
@@ -63,6 +68,7 @@ if ($Profiling) {
 } elseif ($Benchmark) {
     $artifactPrefix += "-benchmark"
 }
+if ($Messaging -and $RollbackTest) { $artifactPrefix += "-rollback-test" }
 $cargoProfile = if ($Performance) { "performance" } else { "release" }
 $elf = Join-Path $projectRoot "target\thumbv7em-none-eabihf\$cargoProfile\$binaryName"
 $unsignedBinary = Join-Path $artifacts "$artifactPrefix-unsigned.bin"
@@ -79,14 +85,18 @@ New-Item -ItemType Directory -Path $artifacts -Force | Out-Null
 Push-Location $projectRoot
 try {
     $cargoArguments = @("build", "--locked", "--profile", $cargoProfile)
-    if ($NativeUdp -or $W5500 -or $W5500Offload -or $MulticastSmoke) {
-        $feature = if ($MulticastSmoke) { "multicast-smoke" } elseif ($W5500Offload) { "wiznet-offload" } elseif ($W5500) { "wiznet" } else { "native-udp" }
+    if ($NativeUdp -or $W5500 -or $W5500Offload -or $MulticastSmoke -or $Messaging) {
+        $feature = if ($Messaging) { "messaging-$Messaging" } elseif ($MulticastSmoke) { "multicast-smoke" } elseif ($W5500Offload) { "wiznet-offload" } elseif ($W5500) { "wiznet" } else { "native-udp" }
         if ($Profiling) {
             $feature += ",profiling"
         } elseif ($Performance) {
             $feature += ",performance"
         } elseif ($Benchmark) {
             $feature += ",benchmark"
+        }
+        if ($RollbackTest) {
+            Write-Warning "Building a hardware-test image that will NOT confirm itself."
+            $feature += ",rollback-test"
         }
         $cargoArguments += @(
             "--no-default-features",
