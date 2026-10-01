@@ -719,3 +719,9 @@ selectors, build resource measurements, and trial/recovery bench procedures.
 Physical Phase 3/4 gates remain pending. The [Phase 5 walkthrough](docs/messaging/PHASE5.md)
 adds optional CRC-32C, request and stream fault demos, and verification of all six
 format/CRC configurations. Board fault testing remains pending.
+
+The [Phase 6 walkthrough](docs/messaging/PHASE6.md) adds a six-configuration
+capture runner, CSV statistics, fixed-fixture Rust codec benchmarks and a
+[comparison report](docs/messaging/COMPARISON.md). Local loopback and MCU build
+evidence are recorded separately; the physical ten-minute-per-configuration
+comparison and runtime stack/MCU timing gates remain pending.

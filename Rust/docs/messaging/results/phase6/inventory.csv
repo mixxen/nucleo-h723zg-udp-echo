@@ -1,0 +1,40 @@
+record,path,name,specification,category,physical_lines
+direct_dependency,Rust/messaging/Cargo.toml,crc,"{""default-features"": false, ""version"": ""=3.3.0""}",,
+direct_dependency,Rust/messaging/Cargo.toml,micropb,"{""default-features"": false, ""features"": [""container-heapless-0-9"", ""encode"", ""decode""], ""optional"": true, ""version"": ""=0.6.0""}",,
+direct_dependency,Rust/messaging/Cargo.toml,heapless,"{""features"": [""serde""], ""version"": ""=0.9.3""}",,
+direct_dependency,Rust/messaging/Cargo.toml,serde,"{""default-features"": false, ""features"": [""derive""], ""version"": ""=1.0.228""}",,
+direct_dependency,Rust/messaging/Cargo.toml,serde-json-core,"{""optional"": true, ""version"": ""=0.6.0""}",,
+direct_dependency,Rust/messaging/Cargo.toml,csv-core,"{""optional"": true, ""version"": ""=0.1.13""}",,
+direct_dependency,Rust/messaging/Cargo.toml,ryu,"{""optional"": true, ""version"": ""=1.0.23""}",,
+direct_dependency,Rust/tools/message-demo/Cargo.toml,messaging-codec,"{""path"": ""../../messaging""}",,
+direct_dependency,Rust/tools/message-demo/Cargo.toml,serde_json,"""=1.0.145""",,
+direct_dependency,Rust/tools/message-demo/Cargo.toml,getrandom,"""=0.3.4""",,
+direct_dependency,Rust/tools/message-demo/Cargo.toml,socket2,"""=0.6.0""",,
+direct_dependency,Rust/tools/message-demo/generator/Cargo.toml,micropb-gen,"""=0.6.0""",,
+direct_dependency,Rust/tools/message-demo/generator/Cargo.toml,serde_json,"""=1.0.145""",,
+source_file,Rust/messaging/src/cells.rs,,,handwritten,72
+source_file,Rust/messaging/src/csv.rs,,,handwritten,88
+source_file,Rust/messaging/src/framing.rs,,,handwritten,173
+source_file,Rust/messaging/src/generated/model.rs,,,generated,548
+source_file,Rust/messaging/src/generated/protobuf.rs,,,generated,2004
+source_file,Rust/messaging/src/lib.rs,,,handwritten,177
+source_file,Rust/messaging/src/schedule.rs,,,handwritten,80
+source_file,Rust/messaging/src/service.rs,,,handwritten,216
+source_file,Rust/messaging/src/validation.rs,,,handwritten,127
+source_file,Rust/tools/message-demo/src/benchmark.rs,,,handwritten,109
+source_file,Rust/tools/message-demo/src/log.rs,,,handwritten,143
+source_file,Rust/tools/message-demo/src/main.rs,,,handwritten,314
+source_file,Rust/tools/message-demo/src/streams.rs,,,handwritten,198
+source_file,Rust/tools/message-demo/python/benchmark.py,,,handwritten,175
+source_file,Rust/tools/message-demo/python/client.py,,,handwritten,253
+source_file,Rust/tools/message-demo/python/codec.py,,,handwritten,269
+source_file,Rust/tools/message-demo/python/compare.py,,,handwritten,469
+source_file,Rust/tools/message-demo/python/comparison_stats.py,,,handwritten,352
+source_file,Rust/tools/message-demo/python/faults.py,,,handwritten,136
+source_file,Rust/tools/message-demo/python/framing.py,,,handwritten,47
+source_file,Rust/tools/message-demo/python/generated/messaging_pb2.py,,,generated,56
+source_file,Rust/tools/message-demo/python/generated/schema.py,,,generated,5
+source_file,Rust/tools/message-demo/python/listener.py,,,handwritten,262
+source_file,Rust/tools/message-demo/python/profile.py,,,handwritten,46
+source_file,Rust/tools/message-demo/python/stream_faults.py,,,handwritten,143
+source_file,Rust/tools/message-demo/python/stream_state.py,,,handwritten,175

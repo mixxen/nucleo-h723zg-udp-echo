@@ -1,0 +1,75 @@
+{
+  "revision": "deb811c-dirty",
+  "compiler": "rustc 1.98.1 (48a229cea 2026-09-01)",
+  "target": "thumbv7em-none-eabihf",
+  "profile": "release",
+  "hardware_tested": false,
+  "images": [
+    {
+      "encoding": "csv",
+      "crc": "off",
+      "codec_features": [
+        "csv"
+      ],
+      "unsigned_bytes": 116128,
+      "signed_bytes": 116784,
+      "static_ram_bytes": 28368,
+      "ram_remaining_for_stack_bytes": 102704
+    },
+    {
+      "encoding": "csv",
+      "crc": "on",
+      "codec_features": [
+        "csv"
+      ],
+      "unsigned_bytes": 117376,
+      "signed_bytes": 118032,
+      "static_ram_bytes": 28368,
+      "ram_remaining_for_stack_bytes": 102704
+    },
+    {
+      "encoding": "json",
+      "crc": "off",
+      "codec_features": [
+        "json"
+      ],
+      "unsigned_bytes": 119488,
+      "signed_bytes": 120144,
+      "static_ram_bytes": 28368,
+      "ram_remaining_for_stack_bytes": 102704
+    },
+    {
+      "encoding": "json",
+      "crc": "on",
+      "codec_features": [
+        "json"
+      ],
+      "unsigned_bytes": 120712,
+      "signed_bytes": 121368,
+      "static_ram_bytes": 28368,
+      "ram_remaining_for_stack_bytes": 102704
+    },
+    {
+      "encoding": "protobuf",
+      "crc": "off",
+      "codec_features": [
+        "protobuf"
+      ],
+      "unsigned_bytes": 77888,
+      "signed_bytes": 78544,
+      "static_ram_bytes": 28368,
+      "ram_remaining_for_stack_bytes": 102704
+    },
+    {
+      "encoding": "protobuf",
+      "crc": "on",
+      "codec_features": [
+        "protobuf"
+      ],
+      "unsigned_bytes": 79136,
+      "signed_bytes": 79792,
+      "static_ram_bytes": 28368,
+      "ram_remaining_for_stack_bytes": 102704
+    }
+  ]
+}

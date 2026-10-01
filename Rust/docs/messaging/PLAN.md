@@ -1,7 +1,7 @@
 # Network Messaging Prototype: Phased Implementation Plan
 
 Date: 2026-09-30  
-Status: Original six-phase plan; Phases 1 and 2 are delivered; Phases 3 through 5 implementation/build work is delivered, with physical multicast and MCU acceptance gates pending. See [current checkpoint](CHECKPOINT.md).
+Status: Original six-phase plan; Phases 1 and 2 are delivered; Phases 3 through 6 implementation/tooling work is delivered, with a local comparison report and physical multicast/MCU acceptance gates pending. See [current checkpoint](CHECKPOINT.md).
 
 Repository: https://github.com/mixxen/nucleo-h723zg-udp-echo  
 Reviewed baseline: `b009dc08eca171083a4a52385d3583b3b3154d0b`
@@ -127,6 +127,8 @@ Inject corruption after computing the application CRC but before UDP transmissio
 **Exit:** Expected failures are demonstrated without panic or unbounded memory growth; valid traffic continues afterward.
 
 ## Phase 6: Controlled comparison and walkthrough
+
+Implementation: [runner and walkthrough](PHASE6.md), [local comparison report](COMPARISON.md). Physical native-Ethernet matrix remains pending.
 
 Run the three-format by two-CRC-mode matrix on native Ethernet. Proposed baseline: ten measured minutes per configuration after warm-up, with 10 Hz status, 1 Hz health, one command per second, and two listeners.
 
