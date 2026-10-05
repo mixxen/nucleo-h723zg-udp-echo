@@ -118,8 +118,8 @@ python Rust/tools/message-demo/python/benchmark_live.py inspect \
 ```
 
 Complete means the run and deadline drain finished; it does not mean it met
-performance thresholds. B4 adds sweep/soak orchestration, acceptance thresholds
-and richer offline comparison. Missing/truncated final output remains incomplete.
+performance thresholds. [B4](BENCHMARK_B4.md) now adds sweep/soak orchestration,
+acceptance thresholds and offline reassessment. Missing/truncated final output remains incomplete.
 Output failures still trigger cleanup, but no file API can promise a final record
 when its disk is unavailable. Abrupt process termination relies on lease expiry.
 

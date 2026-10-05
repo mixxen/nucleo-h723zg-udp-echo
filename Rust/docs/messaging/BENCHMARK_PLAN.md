@@ -1,7 +1,7 @@
 # Messaging Benchmark: Phased Implementation Plan
 
 Date: 2026-10-04 HST (2026-10-05 UTC)  
-Status: B1 and B2 merged; B3 firmware delivered for review. Physical gates open.
+Status: B1–B3 merged; B4 stress/soak orchestration delivered for review. Physical gates open.
 Repository baseline: `0ea9a631917e0809ec11619115a18e3f71a301c0` (Phase 6 merged).
 
 This is the follow-on to the [original messaging plan](PLAN.md). It covers the
@@ -62,8 +62,8 @@ until real results are available.
 |---|---|---|---|
 | B1 | Benchmark contract and resource budget | Equivalent messages, limits, compatibility rules and fixed-memory/socket budget | Merged, PR #8 (`60a7605`); software validation in B2/B3 |
 | B2 | Host load generator and live metrics | Fault-controlled host tests prove pacing, correlation, bounded tracking and correct metrics | Merged, PR #9 (`90f70d8`) and PR #10 (`51e1e80`) |
-| B3 | NUCLEO benchmark support | All six format/CRC configurations build and interoperate; physical operation recorded separately | Implemented; review and physical checks pending |
-| B4 | Stress and soak orchestration | Sweeps, long-run reporting, thresholds, recovery checks and interruption handling verified | Planned |
+| B3 | NUCLEO benchmark support | All six format/CRC configurations build and interoperate; physical operation recorded separately | Merged, PR #11 (`ed72ae8`); physical checks pending |
+| B4 | Stress and soak orchestration | Sweeps, long-run reporting, thresholds, recovery checks and interruption handling verified | Implemented; delivered for review |
 | B5 | Physical characterization and report | Reproducible board results establish a tested operating range and disclose unresolved failures | Planned |
 
 ### B1: Benchmark contract and resource budget
@@ -125,7 +125,7 @@ Delivered on `messaging/benchmark-b3`, based on merged B2 PR #10 (`51e1e80`).
 See [B3 instructions and build evidence](BENCHMARK_B3.md). Portable state tests,
 six host socket modes, and six baseline plus six profiling ARM images pass.
 Physical operation, stack high-water and load responsiveness remain unmeasured.
-B4 orchestration is the next software phase.
+B3 is merged in PR #11 (`ed72ae8`). B4 adds orchestration; physical gates remain open.
 
 - Add an opt-in firmware benchmark feature and bounded synthetic payload handling
   through the actual application codec path.
@@ -147,6 +147,13 @@ and lease/configuration failure tests. Physical probe, stream and lease-expiry
 checks require the board and are recorded separately from build success.
 
 ### B4: Stress and soak orchestration
+
+Delivered on `messaging/benchmark-b4`, based on merged B3 PR #11 (`ed72ae8`).
+See [B4 commands, threshold definitions and evidence](BENCHMARK_B4.md).
+The complete portable gate passes, including ten B4 test methods for bounded
+configuration/reporting, continuous renewal, threshold stops, successful/failed
+recovery, interruption, profiling and offline reassessment. B5 physical runs are
+next; no hour/eight-hour hardware soak or sustainable-rate claim has been made.
 
 **Stress:** Sweep selected payload sizes and progressively increase rates with
 explicit dwell times and maximum load. Support command-only, stream-only, and
