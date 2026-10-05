@@ -6,6 +6,10 @@ Status: Original six-phase plan; Phases 1 and 2 are delivered; Phases 3 through 
 Repository: https://github.com/mixxen/nucleo-h723zg-udp-echo  
 Reviewed baseline: `b009dc08eca171083a4a52385d3583b3b3154d0b`
 
+Follow-on: [Messaging benchmark plan (B1–B5)](BENCHMARK_PLAN.md) covers configurable
+payloads/rates, live metrics, stress tests and soaks of the actual messaging
+application. It supplements this original six-phase plan.
+
 ## Goal and scope
 
 Demonstrate the same read-only command/response and multicast status/health behavior using CSV, JSON, and Protobuf. Compare runtime cost, reliability diagnostics, code generation, and developer effort before choosing a format.
