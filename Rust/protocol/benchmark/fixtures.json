@@ -1,0 +1,61 @@
+{
+  "description": "B1 authored inputs and expectations. Expansions are explicit boundary fixtures, not captured runtime results.",
+  "valid": [
+    {"name":"capabilities", "message":{"protocol_version":1,"kind":1,"device_id":"board-01","session_id":"0123456789abcdef","request_id":1,"capabilities":{}}},
+    {"name":"configure", "message":{"protocol_version":1,"kind":2,"device_id":"board-01","boot_id":"fedcba9876543210","session_id":"0123456789abcdef","request_id":2,"run_epoch":1,"configure":{"payload_bytes":64,"pattern_seed":723,"status_period_us":100000,"health_period_us":1000000,"lease_ms":10000}}},
+    {"name":"renew", "message":{"protocol_version":1,"kind":3,"device_id":"board-01","boot_id":"fedcba9876543210","session_id":"0123456789abcdef","request_id":3,"run_epoch":1,"renew":{}}},
+    {"name":"stop", "message":{"protocol_version":1,"kind":4,"device_id":"board-01","boot_id":"fedcba9876543210","session_id":"0123456789abcdef","request_id":4,"run_epoch":1,"stop":{}}},
+    {"name":"probe_empty", "message":{"protocol_version":1,"kind":5,"device_id":"board-01","boot_id":"fedcba9876543210","session_id":"0123456789abcdef","request_id":1,"payload":"","run_epoch":1,"probe":{}}},
+    {"name":"probe_response", "message":{"protocol_version":1,"kind":15,"device_id":"board-01","boot_id":"fedcba9876543210","session_id":"0123456789abcdef","request_id":1,"uptime_ms":12345,"payload":"","run_epoch":1,"probe_response":{}}},
+    {"name":"status", "message":{"protocol_version":1,"kind":21,"device_id":"board-01","boot_id":"fedcba9876543210","session_id":"0123456789abcdef","sequence":0,"uptime_ms":12345,"payload":"","run_epoch":1,"status":{"temperature_celsius":25.5,"validity":1,"synthetic":true}}},
+    {"name":"status_unavailable", "message":{"protocol_version":1,"kind":21,"device_id":"board-01","boot_id":"fedcba9876543210","session_id":"0123456789abcdef","sequence":1,"uptime_ms":12345,"payload":"","run_epoch":1,"status":{"validity":2,"synthetic":true}}},
+    {"name":"health", "message":{"protocol_version":1,"kind":22,"device_id":"board-01","boot_id":"fedcba9876543210","session_id":"0123456789abcdef","sequence":0,"uptime_ms":12345,"payload":"","run_epoch":1,"health":{"state":1,"received_requests":0,"rejected_datagrams":0,"send_errors":0,"skipped_publications":0}}},
+    {"name":"applied", "message":{"protocol_version":1,"kind":12,"device_id":"board-01","boot_id":"fedcba9876543210","session_id":"0123456789abcdef","request_id":2,"uptime_ms":12345,"run_epoch":1,"result":{"code":1,"lease_remaining_ms":10000}}},
+    {"name":"limits", "message":{"protocol_version":1,"kind":11,"device_id":"board-01","boot_id":"fedcba9876543210","session_id":"0123456789abcdef","request_id":1,"uptime_ms":12345,"run_epoch":1,"limits":{"encoding":1,"crc_enabled":false,"max_payload_bytes":512,"max_datagram_bytes":1024,"min_status_period_us":1000,"min_health_period_us":10000,"max_period_us":10000000,"min_lease_ms":2000,"max_lease_ms":30000,"available":true}}}
+  ],
+  "boundary_expansions": {
+    "data_messages": ["probe_empty", "probe_response", "status", "status_unavailable", "health"],
+    "payload_lengths": [0, 1, 128, 129, 512],
+    "metadata": {"device_id_repeat":"x", "device_id_length":32,"request_id":4294967295,"sequence":4294967295,"uptime_ms":4294967295,"run_epoch":4294967295},
+    "health_counters":4294967295
+  },
+  "invalid": [
+    {"name":"missing_payload", "base":"probe_empty", "remove":"payload", "expected":"validation_error"},
+    {"name":"payload_on_control", "base":"configure", "set":{"payload":""}, "expected":"validation_error"},
+    {"name":"oversize_payload", "base":"probe_empty", "payload_repeat":513, "expected":"validation_error"},
+    {"name":"non_pattern_character", "base":"probe_empty", "set":{"payload":"a,b"}, "expected":"validation_error"},
+    {"name":"wrong_version", "base":"probe_empty", "set":{"protocol_version":2}, "expected":"version_error"},
+    {"name":"zero_epoch", "base":"configure", "set":{"run_epoch":0}, "expected":"validation_error"},
+    {"name":"missing_boot", "base":"configure", "remove":"boot_id", "expected":"validation_error"},
+    {"name":"extra_body", "base":"probe_empty", "set":{"renew":{}}, "expected":"validation_error"},
+    {"name":"zero_session", "base":"probe_empty", "set":{"session_id":"0000000000000000"}, "expected":"validation_error"},
+    {"name":"zero_request", "base":"probe_empty", "set":{"request_id":0}, "expected":"validation_error"},
+    {"name":"too_fast_status", "base":"configure", "configure_set":{"status_period_us":999}, "expected":"invalid_configuration"},
+    {"name":"too_fast_health", "base":"configure", "configure_set":{"health_period_us":9999}, "expected":"invalid_configuration"},
+    {"name":"short_lease", "base":"configure", "configure_set":{"lease_ms":1999}, "expected":"invalid_configuration"},
+    {"name":"long_lease", "base":"configure", "configure_set":{"lease_ms":30001}, "expected":"invalid_configuration"},
+    {"name":"large_config_payload", "base":"configure", "configure_set":{"payload_bytes":513}, "expected":"invalid_configuration"}
+  ],
+  "golden_capabilities": {
+    "csv":"1,1,board-01,,0123456789abcdef,1,,,,\r\n",
+    "json":"{\"protocol_version\":1,\"kind\":1,\"device_id\":\"board-01\",\"session_id\":\"0123456789abcdef\",\"request_id\":1,\"capabilities\":{}}",
+    "protobuf_hex":"080110011a08626f6172642d30312a10303132333435363738396162636465663001a20100"
+  },
+  "state_cases": [
+    {"case":"idle valid configure", "expected":"APPLIED; bind owner; start schedules; reset run counters"},
+    {"case":"same configure ID and identical fields", "expected":"ALREADY_APPLIED; do not reset counters, schedules or lease"},
+    {"case":"same control ID but different kind/fields", "expected":"REQUEST_CONFLICT; no state change"},
+    {"case":"older control ID after renew", "expected":"STALE_CONTROL; no state change"},
+    {"case":"second owner while active", "expected":"BUSY; no state change"},
+    {"case":"new configure while already active", "expected":"BUSY; stop and create a new session first"},
+    {"case":"fresh owner renewal before expiry", "expected":"APPLIED; extend original lease duration; preserve schedules/counters"},
+    {"case":"duplicate renewal", "expected":"ALREADY_APPLIED; no lease extension"},
+    {"case":"renew at exact expiry", "expected":"STALE_RUN; expire before processing"},
+    {"case":"probe after deadline", "expected":"no probe reply; expire and advance epoch"},
+    {"case":"stop then delayed configure from same old epoch", "expected":"STALE_RUN; no restart"},
+    {"case":"old STOP while another run is active", "expected":"STALE_RUN; new run unaffected"},
+    {"case":"link/configuration loss", "expected":"end run, clear queues, advance epoch; remain idle on reconnect"},
+    {"case":"epoch exhausted", "expected":"capabilities available=false; reject configure until reboot"},
+    {"case":"control ID exhausted", "expected":"stop with final available ID or expire; never wrap in session"}
+  ]
+}

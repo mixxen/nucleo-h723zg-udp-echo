@@ -1,7 +1,7 @@
 # Messaging Benchmark: Phased Implementation Plan
 
 Date: 2026-10-04 HST (2026-10-05 UTC)  
-Status: Agreed direction; B1–B5 are planned, not implemented.  
+Status: B1 contract and reference checks delivered for review; B2–B5 planned.
 Repository baseline: `0ea9a631917e0809ec11619115a18e3f71a301c0` (Phase 6 merged).
 
 This is the follow-on to the [original messaging plan](PLAN.md). It covers the
@@ -60,7 +60,7 @@ until real results are available.
 
 | Stage | Deliverable | Exit criteria | Status |
 |---|---|---|---|
-| B1 | Benchmark contract and resource budget | Reviewed equivalent messages, limits, compatibility rules and fixed-memory/socket budget | Planned |
+| B1 | Benchmark contract and resource budget | Equivalent messages, limits, compatibility rules and fixed-memory/socket budget | Delivered for review; runtime validation pending |
 | B2 | Host load generator and live metrics | Fault-controlled host tests prove pacing, correlation, bounded tracking and correct metrics | Planned |
 | B3 | NUCLEO benchmark support | All six format/CRC configurations build and interoperate; physical operation recorded separately | Planned |
 | B4 | Stress and soak orchestration | Sweeps, long-run reporting, thresholds, recovery checks and interruption handling verified | Planned |
@@ -84,6 +84,13 @@ until real results are available.
 
 Exit evidence: contract, resource table, fixtures, and explicit compatibility and
 state-transition rules. No claims of performance from design limits alone.
+
+B1 deliverables: [contract](BENCHMARK_CONTRACT.md),
+[resource budget and reference size measurements](BENCHMARK_RESOURCES.md), and
+[schema/fixtures/checker](../../protocol/benchmark/). The checker covers 53 valid
+fixtures across six configurations and 15 semantic rejection cases. Lease state
+scenarios are specifications, not executed runtime tests. See the current
+[checkpoint](CHECKPOINT.md) for verification and remaining gates.
 
 ### B2: Host load generator and live metrics
 
@@ -197,7 +204,7 @@ progress table with the PR/commit, verification performed and remaining gates.
 Preserve unrelated repository changes and keep documentation readable for someone
 learning Rust.
 
-Creating this document does not start B1 implementation. Completion means a
+B1 began after plan PR #7 merged (`a90c7c7`). B2 has not started. Completion means a
 reproducible benchmark toolset and physical evidence for the tested operating
 range. Production requirements, final format/CRC policy and deployment acceptance
 remain separate decisions.

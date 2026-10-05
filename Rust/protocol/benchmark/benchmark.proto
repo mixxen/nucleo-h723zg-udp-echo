@@ -1,0 +1,84 @@
+syntax = "proto3";
+package messaging.benchmark.v1;
+import "messaging.proto";
+
+// B1 contract. Not yet linked into the host responder or firmware.
+// Presence, ownership and state rules: docs/messaging/BENCHMARK_CONTRACT.md.
+enum Kind {
+  UNSPECIFIED = 0;
+  CAPABILITIES = 1;
+  CONFIGURE = 2;
+  RENEW = 3;
+  STOP = 4;
+  PROBE = 5;
+  CAPABILITIES_RESPONSE = 11;
+  CONTROL_RESPONSE = 12;
+  PROBE_RESPONSE = 15;
+  STATUS_PUBLICATION = 21;
+  HEALTH_PUBLICATION = 22;
+}
+enum ResultCode {
+  RESULT_UNSPECIFIED = 0;
+  APPLIED = 1;
+  ALREADY_APPLIED = 2;
+  STOPPED = 3;
+  INVALID_CONFIGURATION = 4;
+  BUSY = 5;
+  STALE_RUN = 6;
+  STALE_CONTROL = 7;
+  REQUEST_CONFLICT = 8;
+  NOT_ACTIVE = 9;
+  RESOURCE_EXHAUSTED = 10;
+}
+message Empty {}
+message Limits {
+  optional messaging.v1.Encoding encoding = 1;
+  optional bool crc_enabled = 2;
+  optional uint32 max_payload_bytes = 3;
+  optional uint32 max_datagram_bytes = 4;
+  optional uint32 min_status_period_us = 5;
+  optional uint32 min_health_period_us = 6;
+  optional uint32 max_period_us = 7;
+  optional uint32 min_lease_ms = 8;
+  optional uint32 max_lease_ms = 9;
+  optional bool available = 10;
+}
+message Configuration {
+  optional uint32 payload_bytes = 1;
+  optional uint32 pattern_seed = 2;
+  // Zero disables that benchmark stream; otherwise use the advertised bounds.
+  optional uint32 status_period_us = 3;
+  optional uint32 health_period_us = 4;
+  optional uint32 lease_ms = 5;
+}
+message ControlResult {
+  optional ResultCode code = 1;
+  // Snapshot when the response is generated, not a promise at receive time.
+  optional uint32 lease_remaining_ms = 2;
+}
+message Envelope {
+  optional uint32 protocol_version = 1;
+  optional Kind kind = 2;
+  optional string device_id = 3;
+  optional string boot_id = 4;
+  optional string session_id = 5;
+  optional uint32 request_id = 6;
+  optional uint32 sequence = 7;
+  optional uint32 uptime_ms = 8;
+  // 0..512 ASCII pattern bytes. Present, including empty, only on data messages.
+  optional string payload = 9;
+  // Server generation, incremented when a run ends; never wraps within a boot.
+  optional uint32 run_epoch = 10;
+  oneof body {
+    Empty capabilities = 20;
+    Configuration configure = 21;
+    Empty renew = 22;
+    Empty stop = 23;
+    Empty probe = 24;
+    Limits limits = 25;
+    ControlResult result = 26;
+    Empty probe_response = 27;
+    messaging.v1.Status status = 28;
+    messaging.v1.Health health = 29;
+  }
+}
