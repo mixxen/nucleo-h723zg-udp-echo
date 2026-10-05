@@ -18,6 +18,7 @@ import time
 
 from benchmark_service import Service, valid_configuration
 from benchmark_rust_service import RustService
+from benchmark_profile import Sampler
 from benchmark_wire import Wire, PROFILE, ROOT, pattern
 from codec import CodecError
 from load_metrics import Pacer, ProbeTracker, RunIdentity, StreamTracker
@@ -231,6 +232,7 @@ def provenance(wire):
                 Path(__file__).with_name("benchmark_service.py"),
                 Path(__file__).with_name("benchmark_rust_service.py"),
                 Path(__file__).with_name("benchmark_wire.py"),
+                Path(__file__).with_name("benchmark_profile.py"),
                 Path(__file__).with_name("load_metrics.py"),
                 Path(__file__).with_name("load_report.py"),
             )
@@ -239,6 +241,15 @@ def provenance(wire):
 
 
 def validate_args(args):
+    profile_interval = getattr(args, "profile_interval", 0)
+    if (
+        not math.isfinite(profile_interval)
+        or profile_interval < 0
+        or 0 < profile_interval < 1
+    ):
+        raise ValueError("profile interval must be zero or at least one second")
+    if profile_interval and (args.target_kind != "board" or not args.instrumented):
+        raise ValueError("profiling requires an explicitly instrumented board run")
     for name in ("duration", "report_interval"):
         value = getattr(args, name)
         if not math.isfinite(value) or value <= 0:
@@ -284,7 +295,8 @@ def validate_args(args):
     return config
 
 
-def run(args):
+def run(args, observer=None):
+    """Run one continuous lease; observer may request cleanup at report boundaries."""
     config = validate_args(args)
     wire = Wire(args.format, args.crc)
     target = (args.target, args.command_port)
@@ -316,6 +328,8 @@ def run(args):
         complete = False
         cleanup = "not_acquired"
         measuring = False
+        threshold_stop = None
+        last_observed_boot = None
         try:
             command = resources.enter_context(
                 socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
@@ -393,9 +407,19 @@ def run(args):
                 ),
             )
             pending_control = None
+            sampler = None
+            if getattr(args, "profile_interval", 0):
+                sampler = Sampler(
+                    args.target, args.interface, args.profile_interval, origin
+                )
+                resources.callback(sampler.close)
             next_report = measured_start + int(args.report_interval * 1e9)
             while time.monotonic_ns() < finish_at:
                 now = time.monotonic_ns()
+                if sampler is not None:
+                    sample = sampler.tick(now)
+                    if sample is not None:
+                        report.diagnostic(now, profiling=sample)
                 if now >= lease_expiry:
                     raise RuntimeError("lease confirmation expired")
                 if not measuring and now >= measured_start:
@@ -482,6 +506,23 @@ def run(args):
                             probes.counts[error.outcome] += 1
                             continue
                         observed = time.monotonic_ns()
+                        expected_port = (
+                            args.command_port
+                            if sock is command
+                            else (
+                                args.status_port
+                                if receivers[sock] == 21
+                                else args.health_port
+                            )
+                        )
+                        if (
+                            peer == (args.target, expected_port)
+                            and message.get("device_id") == args.device
+                            and message.get("boot_id") is not None
+                            and message.get("boot_id") != base["boot_id"]
+                        ):
+                            probes.counts["boot_change_observations"] += 1
+                            last_observed_boot = message.get("boot_id")
                         if sock is command and message["kind"] == 12:
                             if (
                                 pending_control is not None
@@ -571,8 +612,17 @@ def run(args):
                         flush=True,
                     )
                     next_report = now + int(args.report_interval * 1e9)
-            complete = True
-            reason = "duration_and_deadline_drain"
+                    if observer is not None and now < measured_end:
+                        threshold_stop = (
+                            observer(record, (now - measured_start) / 1e9) or None
+                        )
+                        if threshold_stop:
+                            report.diagnostic(now, threshold_stop=threshold_stop)
+                            break
+            complete = threshold_stop is None
+            reason = (
+                "threshold_stop" if threshold_stop else "duration_and_deadline_drain"
+            )
         except KeyboardInterrupt:
             reason = "keyboard_interrupt"
         except (OSError, ValueError, RuntimeError, TimeoutError) as error:
@@ -608,6 +658,7 @@ def run(args):
                 cleanup=cleanup,
                 first_health=getattr(probes, "first_health", None),
                 last_health=getattr(probes, "last_health", None),
+                last_observed_boot=last_observed_boot,
             )
             report.finish(now, reason, complete, probes, pacer, streams)
             print(
@@ -656,6 +707,12 @@ def parser():
     client.add_argument("--target", required=True)
     client.add_argument("--target-kind", choices=("host", "board"), required=True)
     client.add_argument("--image-sha256")
+    client.add_argument(
+        "--profile-interval",
+        type=float,
+        default=0,
+        help="optional instrumented-board sampling interval in seconds, zero disables",
+    )
     client.add_argument(
         "--instrumented",
         action="store_true",

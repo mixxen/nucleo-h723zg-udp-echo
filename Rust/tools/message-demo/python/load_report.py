@@ -7,6 +7,13 @@ from pathlib import Path
 from load_metrics import Histogram, stamp
 
 
+def strict_json(text):
+    def reject(value):
+        raise ValueError(f"nonfinite JSON number: {value}")
+
+    return json.loads(text, parse_constant=reject)
+
+
 class RunReport:
     """Exclusive new directory; every complete JSONL line survives interruption.
 
@@ -85,6 +92,7 @@ class RunReport:
             probes=snapshot,
             interval_counts=delta,
             pacing=dict(pacing.counts),
+            health=getattr(probes, "last_health", None),
             streams={str(stream.kind): stream.snapshot(now) for stream in streams},
             send_hz=delta.get("sent", 0) * 1e9 / duration,
             timely_reply_hz=delta.get("timely_reply", 0) * 1e9 / duration,
@@ -167,7 +175,7 @@ def inspect_report(path):
             if not line.endswith("\n"):
                 damage = "truncated_record"
                 break
-            record = json.loads(line)
+            record = strict_json(line)
             if index == 0:
                 if (
                     record.get("type") != "manifest"

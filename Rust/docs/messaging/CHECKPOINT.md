@@ -1,5 +1,29 @@
 # Messaging checkpoint
 
+## Benchmark B4: stress and soak orchestration
+
+Date: 2026-10-05 UTC. Base: merged PR #11, `ed72ae8`; both CI workflows passed
+before merge. Continuation: `messaging/benchmark-b4`, delivered for review.
+
+- Explicit JSON campaign configuration for command-only, stream-only and combined
+  stress sweeps, initial baseline and recovery after each load step. Configurable
+  cumulative threshold stops prevent continuing the ramp after failure.
+- Continuous soak reuses one session/configuration across renewals and interval
+  reports. SIGTERM/Ctrl-C attempt stop; partial evidence remains incomplete.
+- Saved acceptance policies, observed boot changes, health trends and optional
+  nonblocking board profiling. Resource samples are separate from baseline timing.
+- Streaming offline assessment distinguishes pass/fail/incomplete/invalid,
+  reconciles evidence and supports explicitly labeled alternate thresholds.
+- Complete portable gate passes with Rust 1.90.0, including ten new B4 tests.
+  Actual Rust host-service tests cover renewal, overload, recovery and interruption.
+  A 4,000-interval synthetic report stays below 8 MiB traced assessment memory.
+  Existing 14 Rust tests, 32 Python groups, 16 metric tests, ten B2/B3 socket/codec
+  methods, generation/lint and ARM no-allocator link remain green.
+
+See [B4 examples and measurement rules](BENCHMARK_B4.md). No firmware source or
+wire schema changed. B5 board characterization, runtime stack evidence and
+hour/eight-hour physical soaks remain pending.
+
 ## Benchmark B3: opt-in firmware
 
 Date: 2026-10-05 UTC. Base: merged PR #10, `51e1e80`; both CI workflows passed

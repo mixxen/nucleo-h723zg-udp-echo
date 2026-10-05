@@ -105,6 +105,7 @@ run([sys.executable, HERE / "test_multicast.py"], env=env)
 run([sys.executable, HERE / "test_crc.py"], env=env)
 run([sys.executable, HERE / "test_compare.py"], env=env)
 run([sys.executable, HERE / "test_benchmark_live.py"], env=env)
+run([sys.executable, HERE / "test_benchmark_campaign.py"], env=env)
 # Run from the repository root so the existing firmware's link.x/defmt.x configuration
 # is not inherited. This is a link-only portable-codec probe, not a board image.
 run(
