@@ -1,6 +1,9 @@
 //! Phase 4: one wire format, read commands, and two independent multicast streams.
 #![no_std]
 #![no_main]
+#[cfg(feature = "messaging-benchmark")]
+#[path = "../servers/embassy_benchmark.rs"]
+mod benchmark;
 #[path = "../board.rs"]
 mod board;
 #[cfg(not(feature = "rollback-test"))]
@@ -37,7 +40,10 @@ use static_cell::StaticCell;
 use {defmt_rtt as _, panic_probe as _};
 
 // DHCP + command + status + health + optional profiling. No echo/SSH socket.
+#[cfg(not(feature = "messaging-benchmark"))]
 static NETWORK_RESOURCES: StaticCell<StackResources<5>> = StaticCell::new();
+#[cfg(feature = "messaging-benchmark")]
+static NETWORK_RESOURCES: StaticCell<StackResources<8>> = StaticCell::new();
 bind_interrupts!(struct RngInterrupts { RNG => rng::InterruptHandler<RNG>; });
 #[embassy_executor::task]
 async fn net_task(mut runner: embassy_net::Runner<'static, native_rmii::Device>) -> ! {
@@ -67,6 +73,11 @@ async fn main(spawner: Spawner) -> ! {
         error!("messaging codec checkpoint failed; trial remains unconfirmed");
         core::future::pending::<()>().await;
     }
+    #[cfg(feature = "messaging-benchmark")]
+    if !benchmark::self_check(&boot) {
+        error!("benchmark codec/service checkpoint failed; trial remains unconfirmed");
+        core::future::pending::<()>().await;
+    }
     info!(
         "messaging: device={} boot={} format={} crc={}",
         DEVICE_ID,
@@ -92,6 +103,8 @@ async fn main(spawner: Spawner) -> ! {
         stack, ready_led, error_led
     )));
     spawner.spawn(unwrap!(messaging::commands(stack, boot.clone())));
+    #[cfg(feature = "messaging-benchmark")]
+    spawner.spawn(unwrap!(benchmark::run(stack, boot.clone())));
     spawner.spawn(unwrap!(messaging::publish(
         stack,
         boot.clone(),

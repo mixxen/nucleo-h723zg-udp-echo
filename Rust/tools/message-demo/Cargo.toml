@@ -5,7 +5,11 @@ edition = "2024"
 publish = false
 
 [dependencies]
-messaging-codec = { path = "../../messaging" }
+messaging-codec = { path = "../../messaging", features = ["benchmark"] }
 serde_json = "=1.0.145"
 getrandom = "=0.3.4"
 socket2 = "=0.6.0"
+
+[lib]
+name = "benchmark_codec"
+crate-type = ["cdylib"]

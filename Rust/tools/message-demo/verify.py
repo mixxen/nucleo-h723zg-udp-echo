@@ -24,7 +24,10 @@ host = next(
     if line.startswith("host: ")
 )
 run([sys.executable, RUST / "protocol/tools/check_phase1.py"])
+run([sys.executable, RUST / "protocol/benchmark/check_contract.py"])
+run([sys.executable, HERE / "test_load_metrics.py"])
 run([sys.executable, HERE / "check_generation.py"])
+run([sys.executable, HERE / "generate_benchmark.py", "--check"])
 for crate in (RUST / "messaging", HERE, HERE / "generator"):
     run(["cargo", TOOLCHAIN, "fmt", "--manifest-path", crate / "Cargo.toml", "--check"])
 run(
@@ -52,6 +55,8 @@ run(
         RUST / "messaging/Cargo.toml",
         "--target",
         "thumbv7em-none-eabihf",
+        "--features",
+        "benchmark",
         "--lib",
         "--",
         "-D",
@@ -91,12 +96,16 @@ run(
         "--target",
         host,
         "--lib",
+        "--features",
+        "benchmark",
     ]
 )
 run([sys.executable, HERE / "test_demo.py"], env=env)
 run([sys.executable, HERE / "test_multicast.py"], env=env)
 run([sys.executable, HERE / "test_crc.py"], env=env)
 run([sys.executable, HERE / "test_compare.py"], env=env)
+run([sys.executable, HERE / "test_benchmark_live.py"], env=env)
+run([sys.executable, HERE / "test_benchmark_campaign.py"], env=env)
 # Run from the repository root so the existing firmware's link.x/defmt.x configuration
 # is not inherited. This is a link-only portable-codec probe, not a board image.
 run(
@@ -112,6 +121,8 @@ run(
         "thumbv7em-none-eabihf",
         "--example",
         "no_alloc",
+        "--features",
+        "benchmark",
         "--",
         "-C",
         "link-arg=-e_start",

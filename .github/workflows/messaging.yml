@@ -101,6 +101,7 @@ jobs:
           python-version: '3.12'
       - run: python -m pip install imgtool==2.4.0
       - run: python Rust/tools/message-demo/verify_board.py
+      - run: python Rust/tools/message-demo/verify_board.py --benchmark
       - uses: actions/upload-artifact@v4
         with:
           name: messaging-resources
@@ -108,3 +109,6 @@ jobs:
             Rust/artifacts/messaging/resources.json
             Rust/artifacts/messaging/*-sections.txt
             Rust/artifacts/messaging/*-symbols.txt
+            Rust/artifacts/messaging-benchmark/resources.json
+            Rust/artifacts/messaging-benchmark/*-sections.txt
+            Rust/artifacts/messaging-benchmark/*-symbols.txt

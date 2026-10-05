@@ -9,6 +9,7 @@ default = ["csv", "json", "protobuf"]
 csv = ["dep:csv-core", "dep:ryu"]
 json = ["dep:serde-json-core"]
 protobuf = ["dep:micropb"]
+benchmark = []
 
 [dependencies]
 crc = { version = "=3.3.0", default-features = false }

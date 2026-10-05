@@ -1,0 +1,25 @@
+{
+  "profile_version": 1,
+  "schema": "benchmark.proto",
+  "package": "messaging.benchmark.v1",
+  "json_mapping": "benchmark-json-v1",
+  "max_datagram_bytes": 1024,
+  "max_body_bytes": 1016,
+  "crc_trailer_bytes": 8,
+  "max_payload_bytes": 512,
+  "string_max_utf8_bytes": {"Envelope.device_id": 32, "Envelope.boot_id": 16, "Envelope.session_id": 16, "Envelope.payload": 512},
+  "common_csv_columns": ["protocol_version", "kind", "device_id", "boot_id", "session_id", "request_id", "sequence", "uptime_ms", "payload", "run_epoch"],
+  "body_csv_columns": {
+    "capabilities": [], "configure": ["payload_bytes", "pattern_seed", "status_period_us", "health_period_us", "lease_ms"],
+    "renew": [], "stop": [], "probe": [],
+    "limits": ["encoding", "crc_enabled", "max_payload_bytes", "max_datagram_bytes", "min_status_period_us", "min_health_period_us", "max_period_us", "min_lease_ms", "max_lease_ms", "available"],
+    "result": ["code", "lease_remaining_ms"], "probe_response": [],
+    "status": ["temperature_celsius", "validity", "synthetic"],
+    "health": ["state", "received_requests", "rejected_datagrams", "send_errors", "skipped_publications"]
+  },
+  "kind_body": {"1": "capabilities", "2": "configure", "3": "renew", "4": "stop", "5": "probe", "11": "limits", "12": "result", "15": "probe_response", "21": "status", "22": "health"},
+  "limits": {"min_status_period_us": 1000, "min_health_period_us": 10000, "max_period_us": 10000000, "min_lease_ms": 2000, "max_lease_ms": 30000},
+  "defaults": {"command_port": 42010, "status_port": 42011, "health_port": 42012, "group": "239.255.42.1", "ttl": 1, "payload_bytes": 64, "pattern_seed": 723, "status_period_us": 100000, "health_period_us": 1000000, "lease_ms": 10000, "command_hz": 10, "outstanding_requests": 64, "response_deadline_ms": 1000, "report_interval_ms": 1000},
+  "host_limits": {"max_command_hz": 10000, "max_outstanding_requests": 4096, "max_response_deadline_ms": 60000, "max_receive_batch": 64, "reorder_window": 4096},
+  "firmware_budget": {"stack_resources_with_profiling": 8, "additional_payload_storage_bytes": 10240, "maximum_total_static_ram_bytes": 65536, "signed_image_limit_bytes": 262144}
+}

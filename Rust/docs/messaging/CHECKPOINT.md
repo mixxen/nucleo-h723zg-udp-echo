@@ -1,4 +1,128 @@
-# Phase 6 checkpoint
+# Messaging checkpoint
+
+## Benchmark B4: stress and soak orchestration
+
+Date: 2026-10-05 UTC. Base: merged PR #11, `ed72ae8`; both CI workflows passed
+before merge. Continuation: `messaging/benchmark-b4`, delivered for review.
+
+- Explicit JSON campaign configuration for command-only, stream-only and combined
+  stress sweeps, initial baseline and recovery after each load step. Configurable
+  cumulative threshold stops prevent continuing the ramp after failure.
+- Continuous soak reuses one session/configuration across renewals and interval
+  reports. SIGTERM/Ctrl-C attempt stop; partial evidence remains incomplete.
+- Saved acceptance policies, observed boot changes, health trends and optional
+  nonblocking board profiling. Resource samples are separate from baseline timing.
+- Streaming offline assessment distinguishes pass/fail/incomplete/invalid,
+  reconciles evidence and supports explicitly labeled alternate thresholds.
+- Complete portable gate passes with Rust 1.90.0, including ten new B4 tests.
+  Actual Rust host-service tests cover renewal, overload, recovery and interruption.
+  A 4,000-interval synthetic report stays below 8 MiB traced assessment memory.
+  Existing 14 Rust tests, 32 Python groups, 16 metric tests, ten B2/B3 socket/codec
+  methods, generation/lint and ARM no-allocator link remain green.
+
+See [B4 examples and measurement rules](BENCHMARK_B4.md). No firmware source or
+wire schema changed. B5 board characterization, runtime stack evidence and
+hour/eight-hour physical soaks remain pending.
+
+## Benchmark B3: opt-in firmware
+
+Date: 2026-10-05 UTC. Base: merged PR #10, `51e1e80`; both CI workflows passed
+before merge. Continuation: `messaging/benchmark-b3`, delivered for review.
+
+- Portable no-allocator Rust lease/control/scheduling service shared by firmware
+  and the default host responder. Six new state tests cover ownership, replay,
+  atomic rejection, exact expiry, suppression, exhaustion, patterns and schedules.
+- Opt-in firmware coordinator adds unicast control/probes and two independently
+  paced multicast streams while retaining normal traffic. Bounded nonblocking
+  queues, newest-sample scheduling and link/config/lease cancellation.
+- Benchmark codec and socket startup checks participate in boot confirmation.
+  Signing/flash helpers accept `-MessagingBenchmark`; CI adds the benchmark matrix.
+- Portable gate passes: 14 Rust tests, existing 32 Python groups, 16 metrics tests,
+  10 live codec/service/socket methods, generation/lint and ARM no-allocator link.
+  Six actual-Rust-service socket modes, fault injection and interruption pass.
+- Six baseline and six profiling ARM images pass build/lint/signature/resource
+  gates. Static RAM: 38,144 / 38,456 bytes respectively; maximum signed image:
+  144,072 bytes. Rollback variant and invalid-format checks also pass.
+
+See [B3 build/trial instructions and limitations](BENCHMARK_B3.md). Physical
+benchmark boot/network/lease/recovery tests and stack high-water remain pending.
+B4 stress/soak orchestration is next; no physical performance result is claimed.
+
+## Benchmark B2: live host integration
+
+Date: 2026-10-05 UTC. Base: merged metrics PR #9, `90f70d8`.
+Both CI workflows passed before that merge. The continuation is on
+`messaging/benchmark-b2-live`, delivered for review.
+
+- Opt-in portable benchmark codecs generated from the schema, shared CRC framing,
+  bounded CSV scratch/fields, strict validation and host-only Python/Rust binding.
+- Host leased control service, concurrent paced probes, status/health multicast,
+  warm-up isolation, deadline drain, live summaries and incremental reports.
+- Fault tests exercise dropped ACKs/replies, delayed/duplicate replies, CRC damage,
+  invalid-packet bursts and interruption. Renewal uses the remaining lease budget
+  after retransmission, preventing an overly late retry following a lost ACK.
+- Cross-language fixtures and six real loopback format/CRC runs; benchmark codecs
+  are reachable in the ARM no-allocator link with a 1,536-byte model size gate.
+- Complete portable verification passes locally with Rust 1.90.0, including
+  generation checks, host/ARM lint, eight Rust tests, the existing 32 Python
+  groups, 16 metrics tests and 10 codec/service/socket test methods. The socket
+  method exercises six clean modes plus fault and interruption runs. Separate
+  single-format ARM checks also pass. Final partial CSV intervals reconcile
+  with cumulative send/reply counts in the live tests.
+
+See [build/run instructions and measurement limitations](BENCHMARK_B2_LIVE.md).
+B3 board integration is next; no benchmark-enabled firmware has been flashed,
+and no physical stress/soak/latency or MCU performance result is claimed.
+
+## Benchmark B2: measurement core, first increment
+
+Date: 2026-10-05 UTC. Base: merged B1 PR #8, `60a7605`.
+Both B1 CI workflows passed at `07a4837` before merge. An existing multicast-smoke
+atomic update was rewritten with an equivalent compare/exchange loop to avoid a
+new compiler deprecation while retaining older compiler compatibility.
+
+B2 is **in progress**, split into measurement accounting and codec/live runtime
+review units. See [B2 notes](BENCHMARK_B2.md) for exact semantics and remaining gates.
+
+- Added bounded request/recent history, absolute pacing without catch-up bursts,
+  mergeable fixed-bin RTT histograms and bitmap multicast sequence accounting.
+- Added flushed incremental JSONL/CSV reports with explicit interrupted outcomes
+  and streaming evidence-integrity inspection.
+- Sixteen deterministic accounting/report tests pass locally and are included in
+  the portable verification entry point. The complete portable gate also passes
+  with Rust 1.90.0: schema/generation checks, host/ARM lint, eight Rust tests, the
+  existing 32 Python groups, and the ARM no-allocator link. No new networking,
+  board performance or soak result is claimed by the accounting tests.
+- Benchmark Rust codecs, live CLI/responder/listeners, lease state tests and
+  socket-level fault tests remain B2 work. B3–B5 have not started.
+
+## Benchmark B1: contract and resource budget
+
+Date: 2026-10-05 UTC. Base: merged benchmark plan PR #7, `a90c7c7`.
+B1 delivered for review on `messaging/benchmark-b1`; B2–B5 are not implemented.
+See the [benchmark plan](BENCHMARK_PLAN.md), [contract](BENCHMARK_CONTRACT.md)
+and [resource budget](BENCHMARK_RESOURCES.md).
+
+- Added an isolated benchmark Protobuf schema/profile with equivalent CSV/JSON
+  mappings, 0–512-byte deterministic payloads, discovery, probes, configuration,
+  lease renewal/stop, and multicast status/health.
+- Specified boot/session/epoch correlation, ownership, idempotency, expiry,
+  bounded rates/storage, socket allocation and future firmware resource gates.
+- Reference checker passes 53 fixtures across all six format/CRC configurations,
+  a manual three-format golden request, and 15 semantic rejection cases.
+  Largest tested datagram is 884 bytes (JSON with CRC). Fifteen state scenarios
+  are specified for later executable host/firmware tests.
+- Existing Phase 1 schema/fixture checker passes. The B1 checker is wired into
+  the portable verification entry point. The complete local gate could not run
+  because this workspace has no Rust toolchain; CI must supply that evidence.
+- Normal schema, generated Rust, firmware and existing runtime behavior are
+  unchanged. No benchmark throughput, ARM memory or lease behavior is measured.
+
+Alex reported successfully loading and running the program on a NUCLEO. This is
+initial hardware smoke evidence; the image/configuration and measurements remain
+unrecorded. Physical acceptance gates below remain open.
+
+## Previous Phase 6 checkpoint (retained evidence)
 
 Follow-up, 2026-10-02: an initial Protobuf/CRC-off physical smoke test and a
 generated-decoder wire-type correction are recorded in

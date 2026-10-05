@@ -1,0 +1,29 @@
+{
+  "mode": "soak",
+  "base": {
+    "target": "127.0.0.1",
+    "target_kind": "host",
+    "interface": "127.0.0.1",
+    "format": "protobuf",
+    "crc": "on",
+    "payload_bytes": 256,
+    "command_hz": 100,
+    "status_period_us": 10000,
+    "health_period_us": 100000,
+    "outstanding": 128,
+    "deadline_ms": 1000,
+    "lease_ms": 10000,
+    "warmup": 1,
+    "report_interval": 1
+  },
+  "duration_seconds": 60,
+  "stop_on_failure": true,
+  "thresholds": {
+    "max_p99_ms": 100,
+    "max_deadline_fraction": 0.01,
+    "min_send_ratio": 0.95,
+    "max_stale_fraction": 0.05,
+    "max_gap_fraction": 0.01,
+    "live_min_seconds": 5
+  }
+}
