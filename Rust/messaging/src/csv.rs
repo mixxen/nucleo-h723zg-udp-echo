@@ -7,7 +7,7 @@ use csv_core::{ReadRecordResult, Reader, Terminator, WriteResult, WriterBuilder}
 
 // csv-core intentionally tolerates malformed quoting; this small grammar check
 // enforces the single-record contract before asking it to decode field values.
-fn check_record(bytes: &[u8]) -> Result<(), CodecError> {
+pub(crate) fn check_record(bytes: &[u8]) -> Result<(), CodecError> {
     if !bytes.ends_with(b"\r\n") {
         return Err(CodecError::Decode);
     }

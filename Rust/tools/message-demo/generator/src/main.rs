@@ -9,9 +9,20 @@ fn main() {
     generator.configure(".", Config::new().optional_repr(OptionalRepr::Option));
     for (field, capacity) in profile["string_max_utf8_bytes"].as_object().unwrap() {
         generator.configure(
-            &format!(".messaging.v1.{field}"),
+            &format!(
+                ".{}.{field}",
+                profile["package"].as_str().unwrap_or("messaging.v1")
+            ),
             Config::new().max_bytes(capacity.as_u64().unwrap() as u32),
         );
+    }
+    if let Some(fields) = profile["qualified_string_max_utf8_bytes"].as_object() {
+        for (field, capacity) in fields {
+            generator.configure(
+                field,
+                Config::new().max_bytes(capacity.as_u64().unwrap() as u32),
+            );
+        }
     }
     generator.compile_fdset_file(&args[2], &args[3]).unwrap();
 }

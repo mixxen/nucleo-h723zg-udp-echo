@@ -2,7 +2,8 @@ syntax = "proto3";
 package messaging.benchmark.v1;
 import "messaging.proto";
 
-// B1 contract. Not yet linked into the host responder or firmware.
+// B1 contract, implemented by the B2 host and opt-in portable codec.
+// Board integration is B3.
 // Presence, ownership and state rules: docs/messaging/BENCHMARK_CONTRACT.md.
 enum Kind {
   UNSPECIFIED = 0;

@@ -1,7 +1,7 @@
 # B1 benchmark contract
 
-Status: B1 specification and reference checks. Host/firmware implementation is
-scheduled for B2/B3. Date: 2026-10-05 UTC.
+Status: B1 contract, with [B2 host implementation](BENCHMARK_B2_LIVE.md) delivered
+for review. Firmware integration remains B3. Date: 2026-10-05 UTC.
 
 Authoritative definitions: [benchmark.proto](../../protocol/benchmark/benchmark.proto)
 and [profile.json](../../protocol/benchmark/profile.json). Reviewed examples and
@@ -19,8 +19,9 @@ alongside the ordinary application's 10 Hz status and 1 Hz health publications.
 Record that background workload explicitly in comparisons.
 
 Do not grow the normal `messaging.v1.Envelope`. A benchmark envelope owns only
-one bounded synthetic payload, and its body should be a Rust enum, avoiding one
-large allocation per possible body variant. Reuse the existing status/health
+one bounded synthetic payload. B1 proposed an enum body; B2 retains the generated
+flat adapter with exactly-one-body validation and an ARM 1,536-byte model gate.
+It never duplicates the payload per body variant. Reuse the existing status/health
 types, synthetic sample creation, validation, CSV parsing/formatting primitives,
 JSON strictness rules, micropb generation and CRC framing. Extend the generators
 for the separate namespace/model in B2; do not create a different toy serializer
