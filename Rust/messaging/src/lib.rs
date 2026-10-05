@@ -1,5 +1,7 @@
 //! Portable, bounded codecs shared by the host demo and firmware.
 #![no_std]
+#[cfg(feature = "benchmark")]
+pub mod benchmark;
 #[cfg(feature = "csv")]
 pub mod cells;
 #[cfg(feature = "csv")]

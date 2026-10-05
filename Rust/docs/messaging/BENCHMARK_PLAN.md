@@ -1,7 +1,7 @@
 # Messaging Benchmark: Phased Implementation Plan
 
 Date: 2026-10-04 HST (2026-10-05 UTC)  
-Status: B1 merged; B2 measurement core delivered for review, live integration pending.
+Status: B1 and B2 metrics merged; B2 live host integration delivered for review.
 Repository baseline: `0ea9a631917e0809ec11619115a18e3f71a301c0` (Phase 6 merged).
 
 This is the follow-on to the [original messaging plan](PLAN.md). It covers the
@@ -61,7 +61,7 @@ until real results are available.
 | Stage | Deliverable | Exit criteria | Status |
 |---|---|---|---|
 | B1 | Benchmark contract and resource budget | Equivalent messages, limits, compatibility rules and fixed-memory/socket budget | Merged, PR #8 (`60a7605`); runtime validation pending |
-| B2 | Host load generator and live metrics | Fault-controlled host tests prove pacing, correlation, bounded tracking and correct metrics | In progress: measurement core for review; codec/live runtime pending |
+| B2 | Host load generator and live metrics | Fault-controlled host tests prove pacing, correlation, bounded tracking and correct metrics | Host implementation delivered for review; metrics merged in PR #9 (`90f70d8`) |
 | B3 | NUCLEO benchmark support | All six format/CRC configurations build and interoperate; physical operation recorded separately | Planned |
 | B4 | Stress and soak orchestration | Sweeps, long-run reporting, thresholds, recovery checks and interruption handling verified | Planned |
 | B5 | Physical characterization and report | Reproducible board results establish a tested operating range and disclose unresolved failures | Planned |
@@ -96,8 +96,9 @@ scenarios are specifications, not executed runtime tests. See the current
 
 Progress and review split: [B2 implementation notes](BENCHMARK_B2.md).
 The first increment provides bounded accounting/reporting and deterministic tests.
-The second must integrate benchmark codecs, controls, probes and listeners before
-this stage can be marked complete.
+The second now provides [live host integration](BENCHMARK_B2_LIVE.md): portable
+Rust codecs, controls, concurrent probes, multicast listeners and socket fault tests.
+Board support and physical acceptance remain B3–B5.
 
 - Add paced probes with multiple outstanding requests, bounded tracking and
   strong run/request correlation. Keep the ordinary read-command client usable.

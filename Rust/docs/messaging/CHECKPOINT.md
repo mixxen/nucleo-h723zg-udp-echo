@@ -1,5 +1,31 @@
 # Messaging checkpoint
 
+## Benchmark B2: live host integration
+
+Date: 2026-10-05 UTC. Base: merged metrics PR #9, `90f70d8`.
+Both CI workflows passed before that merge. The continuation is on
+`messaging/benchmark-b2-live`, delivered for review.
+
+- Opt-in portable benchmark codecs generated from the schema, shared CRC framing,
+  bounded CSV scratch/fields, strict validation and host-only Python/Rust binding.
+- Host leased control service, concurrent paced probes, status/health multicast,
+  warm-up isolation, deadline drain, live summaries and incremental reports.
+- Fault tests exercise dropped ACKs/replies, delayed/duplicate replies, CRC damage,
+  invalid-packet bursts and interruption. Renewal uses the remaining lease budget
+  after retransmission, preventing an overly late retry following a lost ACK.
+- Cross-language fixtures and six real loopback format/CRC runs; benchmark codecs
+  are reachable in the ARM no-allocator link with a 1,536-byte model size gate.
+- Complete portable verification passes locally with Rust 1.90.0, including
+  generation checks, host/ARM lint, eight Rust tests, the existing 32 Python
+  groups, 16 metrics tests and 10 codec/service/socket test methods. The socket
+  method exercises six clean modes plus fault and interruption runs. Separate
+  single-format ARM checks also pass. Final partial CSV intervals reconcile
+  with cumulative send/reply counts in the live tests.
+
+See [build/run instructions and measurement limitations](BENCHMARK_B2_LIVE.md).
+B3 board integration is next; no benchmark-enabled firmware has been flashed,
+and no physical stress/soak/latency or MCU performance result is claimed.
+
 ## Benchmark B2: measurement core, first increment
 
 Date: 2026-10-05 UTC. Base: merged B1 PR #8, `60a7605`.

@@ -138,6 +138,12 @@ class RunReport:
             if file is not None:
                 file.close()
 
+    def diagnostic(self, now, **values):
+        stamp(now)
+        if self.finished or now < self.previous:
+            raise ValueError("diagnostic outside active reporting window")
+        self._write(dict(type="diagnostic", elapsed_ns=now - self.start, values=values))
+
     def __enter__(self):
         return self
 
@@ -181,6 +187,8 @@ def inspect_report(path):
                 intervals += 1
             elif record["type"] == "final":
                 final = record
+            elif record["type"] == "diagnostic":
+                pass
             else:
                 raise ValueError("unexpected record type")
             previous = elapsed

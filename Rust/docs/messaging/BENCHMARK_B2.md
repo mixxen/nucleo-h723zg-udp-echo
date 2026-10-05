@@ -2,10 +2,10 @@
 
 Date: 2026-10-05 UTC. B1 merged as PR #8 (`60a7605`).
 
-**B2 is in progress.** This first increment delivers the measurement core and
-incremental reports. It does not yet send benchmark probes, decode benchmark
-messages, configure the board, or listen to benchmark multicast. Existing Phase 6
-tools remain available for their original fixed workloads. B3 has not started.
+**B2 host implementation is delivered for review.** This document records the
+measurement core merged in PR #9. The subsequent
+[live integration and walkthrough](BENCHMARK_B2_LIVE.md) implements codecs,
+controls, probes and listeners. Firmware integration remains B3 and has not started.
 
 ## Why split B2
 
@@ -15,7 +15,7 @@ has two review units:
 
 1. **Measurement core (this increment):** independently testable pacing,
    correlation/accounting, bounded latency/sequence history, incremental reports.
-2. **Codec and live runtime (remaining B2):** generated benchmark Rust adapters,
+2. **Codec and live runtime (now delivered for review):** generated benchmark Rust adapters,
    host responder/control state machine, concurrent probe generator and multicast
    receivers using this accounting core, then six-configuration integration tests.
 
@@ -117,7 +117,11 @@ accounting core. They do not demonstrate UDP fault injection or device behavior.
 The complete portable verification gate also passes locally with Rust 1.90.0,
 including existing regression tests, generation/lint and the ARM no-allocator link.
 
-Before B2 is complete:
+The following integration gates identified by the first increment are now covered
+by the [live runtime and its tests](BENCHMARK_B2_LIVE.md). Physical behavior remains
+unverified; stress/soak orchestration belongs to B4.
+
+Original integration checklist:
 
 - Generate and verify real bounded Rust benchmark codecs across all six
   format/CRC modes, including cross-language fixtures and strict wire rejection.

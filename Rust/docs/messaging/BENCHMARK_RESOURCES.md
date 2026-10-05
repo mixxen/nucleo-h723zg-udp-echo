@@ -3,6 +3,13 @@
 These are B1 design limits and reference encoding measurements, not measured
 firmware RAM/stack or throughput for an implemented benchmark feature.
 
+B2 update: the [live host implementation](BENCHMARK_B2_LIVE.md) now exercises
+these fixtures through actual Rust codecs and links them on ARM without an
+allocator. A compile-time ARM assertion checks the 1,536-byte model bound.
+The generated flat adapter owns one payload; the proposed enum optimization is
+deferred unless B3's measured task/stack budget requires it. The firmware-wide
+static RAM, image and runtime stack gates below remain unmeasured.
+
 ## Wire budget
 
 `python Rust/protocol/benchmark/check_contract.py` compiles the proposed schema

@@ -182,6 +182,10 @@ class StreamTests(unittest.TestCase):
         self.assertEqual(tracker.snapshot(12 * MS)["freshness"], "fresh")
         tracker.finish(12 * MS)
         self.assertEqual(tracker.counts["final_gaps"], 1)
+        self.assertEqual(
+            tracker.snapshot(12 * MS)["freshness_ns"],
+            dict(not_seen=0, fresh=11 * MS, stale=MS),
+        )
         tracker.finish(12 * MS)
         self.assertEqual(tracker.counts["final_gaps"], 1)
 

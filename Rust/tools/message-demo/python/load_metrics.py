@@ -263,7 +263,7 @@ class StreamTracker(Clocked):
     publications cannot be inferred from receiver evidence alone.
     """
 
-    def __init__(self, identity, kind, stale_ns, window=4096):
+    def __init__(self, identity, kind, stale_ns, window=4096, start_ns=None):
         super().__init__()
         if kind not in (21, 22):
             raise ValueError("stream kind must be 21 or 22")
@@ -276,9 +276,27 @@ class StreamTracker(Clocked):
         self.last_progress = None
         self.counts = Counter()
         self.closed = False
+        self.freshness_cursor = start_ns
+        if start_ns is not None:
+            self.clock(start_ns)
+        self.finished_at = None
+        self.freshness_ns = Counter()
+        self.interarrival = Histogram()
+
+    def advance_freshness(self, now):
+        self.clock(now)
+        if self.freshness_cursor is not None and not self.closed:
+            if self.last_progress is None:
+                self.freshness_ns["not_seen"] += now - self.freshness_cursor
+            else:
+                boundary = self.last_progress + self.stale_ns
+                fresh = max(0, min(now, boundary) - self.freshness_cursor)
+                self.freshness_ns["fresh"] += fresh
+                self.freshness_ns["stale"] += now - self.freshness_cursor - fresh
+        self.freshness_cursor = now
 
     def observe(self, identity, kind, sequence, now, datagram_bytes, valid=True):
-        self.clock(now)
+        self.advance_freshness(now)
         integer(sequence, 0, U32_MAX, "sequence")
         integer(datagram_bytes, 0, 65535, "datagram_bytes")
         self.counts["received_datagrams"] += 1
@@ -309,6 +327,7 @@ class StreamTracker(Clocked):
                     else ((self.bits << advance) | 1) & self.mask
                 )
                 self.width = min(self.window, self.width + advance)
+                self.interarrival.add(now - self.last_progress)
                 self.highest, self.last_progress = sequence, now
                 outcome = "progress"
             else:
@@ -324,8 +343,12 @@ class StreamTracker(Clocked):
         return outcome
 
     def snapshot(self, now):
-        self.clock(now)
-        age = None if self.last_progress is None else now - self.last_progress
+        self.advance_freshness(now)
+        age = (
+            None
+            if self.last_progress is None
+            else (self.finished_at if self.closed else now) - self.last_progress
+        )
         return dict(
             counts=dict(self.counts),
             pending_gaps=self.width - self.bits.bit_count(),
@@ -337,11 +360,14 @@ class StreamTracker(Clocked):
                 else "stale" if age >= self.stale_ns else "fresh"
             ),
             closed=self.closed,
+            freshness_ns=dict(self.freshness_ns),
+            forward_interarrival=self.interarrival.snapshot(),
         )
 
     def finish(self, now):
-        self.clock(now)
+        self.advance_freshness(now)
         if not self.closed:
             self.counts["final_gaps"] += self.width - self.bits.bit_count()
             self.bits = self.width = 0
             self.closed = True
+            self.finished_at = now

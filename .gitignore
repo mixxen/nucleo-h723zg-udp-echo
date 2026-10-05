@@ -26,3 +26,4 @@ Thumbs.db
 
 # Local host tooling for the messaging schema checks.
 .venv-messaging/
+__pycache__/
