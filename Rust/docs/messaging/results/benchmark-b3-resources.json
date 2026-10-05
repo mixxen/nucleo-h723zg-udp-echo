@@ -1,0 +1,166 @@
+{
+  "revision": "51e1e80-dirty",
+  "compiler": "rustc 1.99.0 (b940084d7 2026-09-28)",
+  "target": "thumbv7em-none-eabihf",
+  "profile": "release",
+  "benchmark": true,
+  "hardware_tested": false,
+  "images": [
+    {
+      "encoding": "csv",
+      "crc": "off",
+      "instrumentation": "baseline",
+      "codec_features": [
+        "benchmark",
+        "csv"
+      ],
+      "unsigned_bytes": 131400,
+      "signed_bytes": 132056,
+      "static_ram_bytes": 38144,
+      "ram_remaining_for_stack_bytes": 92928
+    },
+    {
+      "encoding": "csv",
+      "crc": "off",
+      "instrumentation": "profiling",
+      "codec_features": [
+        "benchmark",
+        "csv"
+      ],
+      "unsigned_bytes": 133352,
+      "signed_bytes": 134008,
+      "static_ram_bytes": 38456,
+      "ram_remaining_for_stack_bytes": 92616
+    },
+    {
+      "encoding": "csv",
+      "crc": "on",
+      "instrumentation": "baseline",
+      "codec_features": [
+        "benchmark",
+        "csv"
+      ],
+      "unsigned_bytes": 132728,
+      "signed_bytes": 133384,
+      "static_ram_bytes": 38144,
+      "ram_remaining_for_stack_bytes": 92928
+    },
+    {
+      "encoding": "csv",
+      "crc": "on",
+      "instrumentation": "profiling",
+      "codec_features": [
+        "benchmark",
+        "csv"
+      ],
+      "unsigned_bytes": 134672,
+      "signed_bytes": 135328,
+      "static_ram_bytes": 38456,
+      "ram_remaining_for_stack_bytes": 92616
+    },
+    {
+      "encoding": "json",
+      "crc": "off",
+      "instrumentation": "baseline",
+      "codec_features": [
+        "benchmark",
+        "json"
+      ],
+      "unsigned_bytes": 140168,
+      "signed_bytes": 140824,
+      "static_ram_bytes": 38144,
+      "ram_remaining_for_stack_bytes": 92928
+    },
+    {
+      "encoding": "json",
+      "crc": "off",
+      "instrumentation": "profiling",
+      "codec_features": [
+        "benchmark",
+        "json"
+      ],
+      "unsigned_bytes": 142120,
+      "signed_bytes": 142776,
+      "static_ram_bytes": 38456,
+      "ram_remaining_for_stack_bytes": 92616
+    },
+    {
+      "encoding": "json",
+      "crc": "on",
+      "instrumentation": "baseline",
+      "codec_features": [
+        "benchmark",
+        "json"
+      ],
+      "unsigned_bytes": 141480,
+      "signed_bytes": 142136,
+      "static_ram_bytes": 38144,
+      "ram_remaining_for_stack_bytes": 92928
+    },
+    {
+      "encoding": "json",
+      "crc": "on",
+      "instrumentation": "profiling",
+      "codec_features": [
+        "benchmark",
+        "json"
+      ],
+      "unsigned_bytes": 143416,
+      "signed_bytes": 144072,
+      "static_ram_bytes": 38456,
+      "ram_remaining_for_stack_bytes": 92616
+    },
+    {
+      "encoding": "protobuf",
+      "crc": "off",
+      "instrumentation": "baseline",
+      "codec_features": [
+        "benchmark",
+        "protobuf"
+      ],
+      "unsigned_bytes": 94688,
+      "signed_bytes": 95344,
+      "static_ram_bytes": 38144,
+      "ram_remaining_for_stack_bytes": 92928
+    },
+    {
+      "encoding": "protobuf",
+      "crc": "off",
+      "instrumentation": "profiling",
+      "codec_features": [
+        "benchmark",
+        "protobuf"
+      ],
+      "unsigned_bytes": 96584,
+      "signed_bytes": 97240,
+      "static_ram_bytes": 38456,
+      "ram_remaining_for_stack_bytes": 92616
+    },
+    {
+      "encoding": "protobuf",
+      "crc": "on",
+      "instrumentation": "baseline",
+      "codec_features": [
+        "benchmark",
+        "protobuf"
+      ],
+      "unsigned_bytes": 96120,
+      "signed_bytes": 96776,
+      "static_ram_bytes": 38144,
+      "ram_remaining_for_stack_bytes": 92928
+    },
+    {
+      "encoding": "protobuf",
+      "crc": "on",
+      "instrumentation": "profiling",
+      "codec_features": [
+        "benchmark",
+        "protobuf"
+      ],
+      "unsigned_bytes": 98008,
+      "signed_bytes": 98664,
+      "static_ram_bytes": 38456,
+      "ram_remaining_for_stack_bytes": 92616
+    }
+  ]
+}

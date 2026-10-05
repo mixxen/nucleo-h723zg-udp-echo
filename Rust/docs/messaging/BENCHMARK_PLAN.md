@@ -1,7 +1,7 @@
 # Messaging Benchmark: Phased Implementation Plan
 
 Date: 2026-10-04 HST (2026-10-05 UTC)  
-Status: B1 and B2 metrics merged; B2 live host integration delivered for review.
+Status: B1 and B2 merged; B3 firmware delivered for review. Physical gates open.
 Repository baseline: `0ea9a631917e0809ec11619115a18e3f71a301c0` (Phase 6 merged).
 
 This is the follow-on to the [original messaging plan](PLAN.md). It covers the
@@ -23,7 +23,7 @@ listed in the [Phase 6 checkpoint](CHECKPOINT.md).
 
 Reuse the [Phase 6 tools and measurement rules](PHASE6.md) and
 [comparison evidence](COMPARISON.md). Extend or factor existing functionality
-before creating parallel tools. The current messaging benchmark has fixed message
+before creating parallel tools. The original Phase 6 messaging benchmark has fixed message
 shapes, one outstanding command, and compile-time board publication rates. The
 existing raw-UDP tool has size/rate sweeps and soak modes, but it does not measure
 the real messaging codec/application path.
@@ -42,10 +42,10 @@ the real messaging codec/application path.
 | Reporting interval | Live terminal summaries and incremental CSV/JSONL output |
 | Acceptance thresholds | Configurable limits for latency, delivery, freshness, and achieved rate |
 
-Propose synthetic payloads of **0–512 bytes**, subject to B1 worst-case encoding
-and memory checks. Retain the existing 1,024-byte maximum application datagram
-initially, including the CRC trailer when enabled. Reject oversized combinations
-before traffic begins. B1 will freeze rate, concurrency, lease and payload limits;
+Use synthetic payloads of **0–512 bytes**, checked against B1 encoding bounds
+and B3 firmware budgets. Retain the existing 1,024-byte maximum application datagram,
+including the CRC trailer when enabled. Reject oversized combinations
+before traffic begins. B1 freezes rate, concurrency, lease and payload limits;
 these are experimental controls, not production requirements.
 
 Out of scope: actuation, production authentication/control, automatic flashing,
@@ -60,9 +60,9 @@ until real results are available.
 
 | Stage | Deliverable | Exit criteria | Status |
 |---|---|---|---|
-| B1 | Benchmark contract and resource budget | Equivalent messages, limits, compatibility rules and fixed-memory/socket budget | Merged, PR #8 (`60a7605`); runtime validation pending |
-| B2 | Host load generator and live metrics | Fault-controlled host tests prove pacing, correlation, bounded tracking and correct metrics | Host implementation delivered for review; metrics merged in PR #9 (`90f70d8`) |
-| B3 | NUCLEO benchmark support | All six format/CRC configurations build and interoperate; physical operation recorded separately | Planned |
+| B1 | Benchmark contract and resource budget | Equivalent messages, limits, compatibility rules and fixed-memory/socket budget | Merged, PR #8 (`60a7605`); software validation in B2/B3 |
+| B2 | Host load generator and live metrics | Fault-controlled host tests prove pacing, correlation, bounded tracking and correct metrics | Merged, PR #9 (`90f70d8`) and PR #10 (`51e1e80`) |
+| B3 | NUCLEO benchmark support | All six format/CRC configurations build and interoperate; physical operation recorded separately | Implemented; review and physical checks pending |
 | B4 | Stress and soak orchestration | Sweeps, long-run reporting, thresholds, recovery checks and interruption handling verified | Planned |
 | B5 | Physical characterization and report | Reproducible board results establish a tested operating range and disclose unresolved failures | Planned |
 
@@ -98,7 +98,7 @@ Progress and review split: [B2 implementation notes](BENCHMARK_B2.md).
 The first increment provides bounded accounting/reporting and deterministic tests.
 The second now provides [live host integration](BENCHMARK_B2_LIVE.md): portable
 Rust codecs, controls, concurrent probes, multicast listeners and socket fault tests.
-Board support and physical acceptance remain B3–B5.
+Board support is delivered in B3; physical acceptance remains open through B5.
 
 - Add paced probes with multiple outstanding requests, bounded tracking and
   strong run/request correlation. Keep the ordinary read-command client usable.
@@ -120,6 +120,12 @@ duplicates, reordering, corruption and scheduling pressure. Tests verify exact
 accounting, deadline boundaries, bounded memory and incomplete-run reporting.
 
 ### B3: NUCLEO benchmark support
+
+Delivered on `messaging/benchmark-b3`, based on merged B2 PR #10 (`51e1e80`).
+See [B3 instructions and build evidence](BENCHMARK_B3.md). Portable state tests,
+six host socket modes, and six baseline plus six profiling ARM images pass.
+Physical operation, stack high-water and load responsiveness remain unmeasured.
+B4 orchestration is the next software phase.
 
 - Add an opt-in firmware benchmark feature and bounded synthetic payload handling
   through the actual application codec path.

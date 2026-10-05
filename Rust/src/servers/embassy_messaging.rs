@@ -25,7 +25,11 @@ use messaging_codec::{
 
 static COUNTERS: Mutex<RefCell<Counters>> = Mutex::new(RefCell::new(Counters::new()));
 pub static STARTED: AtomicU8 = AtomicU8::new(0);
-pub const ALL_STARTED: u8 = 0b1111; // network runner, command, status, health
+pub const ALL_STARTED: u8 = if cfg!(feature = "messaging-benchmark") {
+    0b11111
+} else {
+    0b1111
+};
 fn counters<R>(update: impl FnOnce(&mut Counters) -> R) -> R {
     critical_section::with(|cs| update(&mut COUNTERS.borrow(cs).borrow_mut()))
 }

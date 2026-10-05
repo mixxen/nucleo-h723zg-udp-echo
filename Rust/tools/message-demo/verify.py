@@ -55,6 +55,8 @@ run(
         RUST / "messaging/Cargo.toml",
         "--target",
         "thumbv7em-none-eabihf",
+        "--features",
+        "benchmark",
         "--lib",
         "--",
         "-D",
@@ -94,6 +96,8 @@ run(
         "--target",
         host,
         "--lib",
+        "--features",
+        "benchmark",
     ]
 )
 run([sys.executable, HERE / "test_demo.py"], env=env)

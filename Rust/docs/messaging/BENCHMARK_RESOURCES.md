@@ -1,14 +1,15 @@
 # B1 resource budget and integration decisions
 
-These are B1 design limits and reference encoding measurements, not measured
-firmware RAM/stack or throughput for an implemented benchmark feature.
+This preserves the B1 design budget. [B3 measured resources](BENCHMARK_B3.md)
+now supersede its unmeasured firmware estimates: 38,144 bytes static RAM baseline,
+38,456 profiling. Runtime stack and throughput are still unmeasured.
 
 B2 update: the [live host implementation](BENCHMARK_B2_LIVE.md) now exercises
 these fixtures through actual Rust codecs and links them on ARM without an
 allocator. A compile-time ARM assertion checks the 1,536-byte model bound.
 The generated flat adapter owns one payload; the proposed enum optimization is
-deferred unless B3's measured task/stack budget requires it. The firmware-wide
-static RAM, image and runtime stack gates below remain unmeasured.
+deferred unless B3's measured task/stack budget requires it. Firmware-wide static
+RAM and image gates are measured in B3; runtime stack remains a physical gate.
 
 ## Wire budget
 
@@ -47,6 +48,11 @@ added to the messaging image.
 | Benchmark status TX and output buffer | 2,048 | One queued datagram plus encoding buffer |
 | Benchmark health TX and output buffer | 2,048 | Independent stream |
 | **Additional fixed packet storage** | **10,240** | Excludes metadata, model and task storage |
+
+B3 uses one shared encoding buffer in a single coordinator, reducing the planned
+additional fixed packet storage to **8,192 bytes**. The two publishers still have
+independent TX queues and schedules. The `Lease` type is compile-time bounded to
+256 bytes and the ARM envelope to 1,536 bytes. The flat adapter remains in use.
 
 The previous uninstrumented messaging baseline used 28,368 static RAM bytes.
 Adding packet storage alone would reach 38,608 bytes; this is arithmetic, not a
