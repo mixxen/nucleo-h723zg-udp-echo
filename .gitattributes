@@ -1,0 +1,4 @@
+# Generation checks compare exact bytes on Windows and Linux.
+Rust/messaging/src/generated/*.rs text eol=lf
+Rust/tools/message-demo/python/generated/*.py text eol=lf
+Rust/docs/messaging/REFERENCE.md text eol=lf

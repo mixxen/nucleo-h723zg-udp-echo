@@ -3,6 +3,7 @@
 import argparse
 import json
 import os
+import re
 from pathlib import Path
 import subprocess
 import tempfile
@@ -21,6 +22,33 @@ KIND_BODY = {
     21: "status",
     22: "health",
 }
+
+
+def guard_protobuf_wire_types(path, messages):
+    """Harden micropb 0.6 output using the same descriptor as the adapters.
+
+    Known field numbers with another wire type are unknown fields in Protobuf.
+    Guard the generated match arms so their existing fallback skips them, rather
+    than interpreting their bytes as the expected type. No extra parsing pass or
+    runtime schema is needed. Fail generation if the upstream output changes.
+    """
+    source = path.read_text()
+    wire_types = {2: 5, 8: 0, 9: 2, 11: 2, 13: 0, 14: 0}
+    for name, message in messages.items():
+        pattern = rf"(impl ::micropb::MessageDecode for {name} \{{)(.*?)(?=\n        impl |\Z)"
+        matches = list(re.finditer(pattern, source, re.S))
+        assert len(matches) == 1, f"Expected one decoder for {name}"
+        match = matches[0]
+        body = match.group(2)
+        for field in message.field:
+            arm = rf"\b{field.number}u32 => \{{"
+            replacement = (
+                f"{field.number}u32 if tag.wire_type() == {wire_types[field.type]} => {{"
+            )
+            body, count = re.subn(arm, replacement, body)
+            assert count == 1, f"Expected one decoder arm for {name}.{field.name}"
+        source = source[:match.start(2)] + body + source[match.end(2):]
+    path.write_text(source, newline="\n")
 
 
 def generate(directory):
@@ -178,7 +206,7 @@ def generate(directory):
         code += ["}); },"]
     code += ["_ => return Err(CodecError::Validation),", "}", "Ok(output)", "}", "}"]
     model = directory / "model.rs"
-    model.write_text("\n".join(code) + "\n")
+    model.write_text("\n".join(code) + "\n", newline="\n")
     subprocess.run(["rustfmt", "+1.90.0", "--edition", "2024", str(model)], check=True)
     subprocess.run(
         [
@@ -198,6 +226,7 @@ def generate(directory):
         ],
         check=True,
     )
+    guard_protobuf_wire_types(directory / "protobuf.rs", messages)
     (directory / "schema.py").write_text(
         "# Generated; do not edit.\nSHAPES = "
         + repr(shapes)
@@ -207,7 +236,8 @@ def generate(directory):
         + repr(KIND_BODY)
         + "\nPROFILE = "
         + repr(profile)
-        + "\n"
+        + "\n",
+        newline="\n",
     )
     lines = [
         "# Generated message reference",
@@ -224,7 +254,7 @@ def generate(directory):
         lines += ["## " + name, "", "| Value | Number |", "|---|---:|"]
         lines += [f"| {key} | {value} |" for key, value in values.items()]
         lines += [""]
-    (directory / "REFERENCE.md").write_text("\n".join(lines))
+    (directory / "REFERENCE.md").write_text("\n".join(lines), newline="\n")
     return {
         "model.rs": ROOT / "messaging/src/generated/model.rs",
         "protobuf.rs": ROOT / "messaging/src/generated/protobuf.rs",

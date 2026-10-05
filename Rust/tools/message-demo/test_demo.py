@@ -217,6 +217,45 @@ class CodecTests(unittest.TestCase):
             )
             self.assertEqual(codec.decode("protobuf", wire + suffix), message)
 
+    def test_protobuf_wrong_wire_types(self):
+        wire = bytes.fromhex(GOLDEN["protobuf_hex"])
+        # Regression: micropb previously treated 0A as protocol_version's 08.
+        self.check_wire("protobuf", b"\x0a" + wire[1:], "decode_error")
+        # A well-formed wrong-typed known field must be skipped as unknown, just
+        # like Google's decoder. Exercise every supported type and nested body.
+        wire_types = {2: 5, 8: 0, 9: 2, 11: 2, 13: 0, 14: 0}
+        def varint(value):
+            result = bytearray()
+            while value > 127:
+                result.append((value & 127) | 128)
+                value >>= 7
+            result.append(value)
+            return bytes(result)
+
+        for case in CASES["valid"]:
+            expected = adapted(case["message"], "protobuf")
+            proto = codec.to_proto(expected, codec.messaging_pb2.Envelope())
+            for descriptor in (proto.DESCRIPTOR, *[
+                value.DESCRIPTOR for entry, value in proto.ListFields()
+                if entry.message_type is not None
+            ]):
+                for entry in descriptor.fields:
+                    wrong_type = 2 if wire_types[entry.type] != 2 else 0
+                    extra = varint((entry.number << 3) | wrong_type) + b"\x00"
+                    if descriptor is proto.DESCRIPTOR:
+                        malformed = proto.SerializeToString() + extra
+                    else:
+                        body_entry = next(e for e, v in proto.ListFields()
+                                          if e.message_type is descriptor)
+                        body = getattr(proto, body_entry.name).SerializeToString() + extra
+                        malformed = (proto.SerializeToString()
+                                     + varint((body_entry.number << 3) | 2)
+                                     + varint(len(body)) + body)
+                    with self.subTest(case=case["name"], message=descriptor.name, field=entry.name):
+                        self.assertEqual(codec.decode("protobuf", malformed), expected)
+                        self.assertEqual(self.rpc("decode", "protobuf", hex=malformed.hex()),
+                                         {"message": expected})
+
     def test_protobuf_message_merge_and_oneof(self):
         expected = copy.deepcopy(CASES["valid"][7]["message"])
         first = copy.deepcopy(expected)

@@ -1,7 +1,8 @@
 # Messaging prototype contract v1
 
-Status: Phase 1 design baseline, 2026-09-30. No running service is delivered by
-this document. [Plan](PLAN.md) · [Integration](INTEGRATION.md) ·
+Status: v1 contract implemented by the host demo and native-RMII firmware.
+Physical acceptance and production selection remain incomplete.
+[Plan](PLAN.md) · [Integration](INTEGRATION.md) ·
 [Fixtures](../../protocol/fixtures/cases.json) · [Checkpoint](CHECKPOINT.md).
 
 ## Authoring decision

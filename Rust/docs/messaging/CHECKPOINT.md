@@ -1,5 +1,11 @@
 # Phase 6 checkpoint
 
+Follow-up, 2026-10-02: an initial Protobuf/CRC-off physical smoke test and a
+generated-decoder wire-type correction are recorded in
+[Protobuf review](PROTOBUF_REVIEW.md). The correction changes codec behavior on
+wrong-typed fields; the historical Phase 6 tables below are not post-fix results.
+Full physical acceptance remains pending. The original checkpoint follows.
+
 Date: 2026-10-01 UTC. Base: merged Phase 5, `60e0b25` (PR #5).
 Phase 5's Rust and Messaging prototype CI workflows passed before this work.
 

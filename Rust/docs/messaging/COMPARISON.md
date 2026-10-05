@@ -1,5 +1,9 @@
 # Messaging comparison: local evidence and pending board work
 
+Follow-up: [Protobuf review](PROTOBUF_REVIEW.md) records the 2026-10-02 board
+smoke test and decoder correction. The tables here retain their original
+provenance; they have not been regenerated for the corrected codec.
+
 Date: 2026-10-01 UTC. Base: merged Phase 5, `60e0b253fd09b0d821db00f72f60c63fab0836ad`.
 These results characterize this implementation, fixed fixtures, and a shared Linux
 host. They do not complete the planned native-Ethernet comparison. Reproduction

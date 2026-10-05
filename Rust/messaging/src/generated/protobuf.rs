@@ -138,7 +138,7 @@ pub mod messaging_ {
                     let tag = decoder.decode_tag()?;
                     match tag.field_num() {
                         0 => return Err(::micropb::DecodeError::ZeroField),
-                        1u32 => {
+                        1u32 if tag.wire_type() == 2 => {
                             let mut_ref = &mut *self
                                 .r#firmware_version
                                 .get_or_insert_with(::core::default::Default::default);
@@ -147,7 +147,7 @@ pub mod messaging_ {
                                     .decode_string(mut_ref, ::micropb::Presence::Explicit)?;
                             };
                         }
-                        2u32 => {
+                        2u32 if tag.wire_type() == 0 => {
                             let mut_ref = &mut *self
                                 .r#encoding
                                 .get_or_insert_with(::core::default::Default::default);
@@ -352,7 +352,7 @@ pub mod messaging_ {
                     let tag = decoder.decode_tag()?;
                     match tag.field_num() {
                         0 => return Err(::micropb::DecodeError::ZeroField),
-                        1u32 => {
+                        1u32 if tag.wire_type() == 5 => {
                             let mut_ref = &mut *self
                                 .r#temperature_celsius
                                 .get_or_insert_with(::core::default::Default::default);
@@ -361,7 +361,7 @@ pub mod messaging_ {
                                 *mut_ref = val as _;
                             };
                         }
-                        2u32 => {
+                        2u32 if tag.wire_type() == 0 => {
                             let mut_ref = &mut *self
                                 .r#validity
                                 .get_or_insert_with(::core::default::Default::default);
@@ -370,7 +370,7 @@ pub mod messaging_ {
                                 *mut_ref = val as _;
                             };
                         }
-                        3u32 => {
+                        3u32 if tag.wire_type() == 0 => {
                             let mut_ref = &mut *self
                                 .r#synthetic
                                 .get_or_insert_with(::core::default::Default::default);
@@ -664,7 +664,7 @@ pub mod messaging_ {
                     let tag = decoder.decode_tag()?;
                     match tag.field_num() {
                         0 => return Err(::micropb::DecodeError::ZeroField),
-                        1u32 => {
+                        1u32 if tag.wire_type() == 0 => {
                             let mut_ref = &mut *self
                                 .r#state
                                 .get_or_insert_with(::core::default::Default::default);
@@ -675,7 +675,7 @@ pub mod messaging_ {
                                 *mut_ref = val as _;
                             };
                         }
-                        2u32 => {
+                        2u32 if tag.wire_type() == 0 => {
                             let mut_ref = &mut *self
                                 .r#received_requests
                                 .get_or_insert_with(::core::default::Default::default);
@@ -684,7 +684,7 @@ pub mod messaging_ {
                                 *mut_ref = val as _;
                             };
                         }
-                        3u32 => {
+                        3u32 if tag.wire_type() == 0 => {
                             let mut_ref = &mut *self
                                 .r#rejected_datagrams
                                 .get_or_insert_with(::core::default::Default::default);
@@ -693,7 +693,7 @@ pub mod messaging_ {
                                 *mut_ref = val as _;
                             };
                         }
-                        4u32 => {
+                        4u32 if tag.wire_type() == 0 => {
                             let mut_ref = &mut *self
                                 .r#send_errors
                                 .get_or_insert_with(::core::default::Default::default);
@@ -702,7 +702,7 @@ pub mod messaging_ {
                                 *mut_ref = val as _;
                             };
                         }
-                        5u32 => {
+                        5u32 if tag.wire_type() == 0 => {
                             let mut_ref = &mut *self
                                 .r#skipped_publications
                                 .get_or_insert_with(::core::default::Default::default);
@@ -906,7 +906,7 @@ pub mod messaging_ {
                     let tag = decoder.decode_tag()?;
                     match tag.field_num() {
                         0 => return Err(::micropb::DecodeError::ZeroField),
-                        1u32 => {
+                        1u32 if tag.wire_type() == 0 => {
                             let mut_ref = &mut *self
                                 .r#code
                                 .get_or_insert_with(::core::default::Default::default);
@@ -1274,7 +1274,7 @@ pub mod messaging_ {
                     let tag = decoder.decode_tag()?;
                     match tag.field_num() {
                         0 => return Err(::micropb::DecodeError::ZeroField),
-                        1u32 => {
+                        1u32 if tag.wire_type() == 0 => {
                             let mut_ref = &mut *self
                                 .r#protocol_version
                                 .get_or_insert_with(::core::default::Default::default);
@@ -1283,7 +1283,7 @@ pub mod messaging_ {
                                 *mut_ref = val as _;
                             };
                         }
-                        2u32 => {
+                        2u32 if tag.wire_type() == 0 => {
                             let mut_ref = &mut *self
                                 .r#kind
                                 .get_or_insert_with(::core::default::Default::default);
@@ -1294,7 +1294,7 @@ pub mod messaging_ {
                                 *mut_ref = val as _;
                             };
                         }
-                        3u32 => {
+                        3u32 if tag.wire_type() == 2 => {
                             let mut_ref = &mut *self
                                 .r#device_id
                                 .get_or_insert_with(::core::default::Default::default);
@@ -1303,7 +1303,7 @@ pub mod messaging_ {
                                     .decode_string(mut_ref, ::micropb::Presence::Explicit)?;
                             };
                         }
-                        4u32 => {
+                        4u32 if tag.wire_type() == 2 => {
                             let mut_ref = &mut *self
                                 .r#boot_id
                                 .get_or_insert_with(::core::default::Default::default);
@@ -1312,7 +1312,7 @@ pub mod messaging_ {
                                     .decode_string(mut_ref, ::micropb::Presence::Explicit)?;
                             };
                         }
-                        5u32 => {
+                        5u32 if tag.wire_type() == 2 => {
                             let mut_ref = &mut *self
                                 .r#client_session
                                 .get_or_insert_with(::core::default::Default::default);
@@ -1321,7 +1321,7 @@ pub mod messaging_ {
                                     .decode_string(mut_ref, ::micropb::Presence::Explicit)?;
                             };
                         }
-                        6u32 => {
+                        6u32 if tag.wire_type() == 0 => {
                             let mut_ref = &mut *self
                                 .r#request_id
                                 .get_or_insert_with(::core::default::Default::default);
@@ -1330,7 +1330,7 @@ pub mod messaging_ {
                                 *mut_ref = val as _;
                             };
                         }
-                        7u32 => {
+                        7u32 if tag.wire_type() == 0 => {
                             let mut_ref = &mut *self
                                 .r#sequence
                                 .get_or_insert_with(::core::default::Default::default);
@@ -1339,7 +1339,7 @@ pub mod messaging_ {
                                 *mut_ref = val as _;
                             };
                         }
-                        8u32 => {
+                        8u32 if tag.wire_type() == 0 => {
                             let mut_ref = &mut *self
                                 .r#uptime_ms
                                 .get_or_insert_with(::core::default::Default::default);
@@ -1348,7 +1348,7 @@ pub mod messaging_ {
                                 *mut_ref = val as _;
                             };
                         }
-                        20u32 => {
+                        20u32 if tag.wire_type() == 2 => {
                             let mut_ref = loop {
                                 if let ::core::option::Option::Some(variant) = &mut self
                                     .r#body
@@ -1365,7 +1365,7 @@ pub mod messaging_ {
                             };
                             mut_ref.decode_len_delimited(decoder)?;
                         }
-                        21u32 => {
+                        21u32 if tag.wire_type() == 2 => {
                             let mut_ref = loop {
                                 if let ::core::option::Option::Some(variant) = &mut self
                                     .r#body
@@ -1382,7 +1382,7 @@ pub mod messaging_ {
                             };
                             mut_ref.decode_len_delimited(decoder)?;
                         }
-                        22u32 => {
+                        22u32 if tag.wire_type() == 2 => {
                             let mut_ref = loop {
                                 if let ::core::option::Option::Some(variant) = &mut self
                                     .r#body
@@ -1399,7 +1399,7 @@ pub mod messaging_ {
                             };
                             mut_ref.decode_len_delimited(decoder)?;
                         }
-                        23u32 => {
+                        23u32 if tag.wire_type() == 2 => {
                             let mut_ref = loop {
                                 if let ::core::option::Option::Some(variant) = &mut self
                                     .r#body
@@ -1416,7 +1416,7 @@ pub mod messaging_ {
                             };
                             mut_ref.decode_len_delimited(decoder)?;
                         }
-                        24u32 => {
+                        24u32 if tag.wire_type() == 2 => {
                             let mut_ref = loop {
                                 if let ::core::option::Option::Some(variant) = &mut self
                                     .r#body
@@ -1431,7 +1431,7 @@ pub mod messaging_ {
                             };
                             mut_ref.decode_len_delimited(decoder)?;
                         }
-                        25u32 => {
+                        25u32 if tag.wire_type() == 2 => {
                             let mut_ref = loop {
                                 if let ::core::option::Option::Some(variant) = &mut self
                                     .r#body
@@ -1446,7 +1446,7 @@ pub mod messaging_ {
                             };
                             mut_ref.decode_len_delimited(decoder)?;
                         }
-                        26u32 => {
+                        26u32 if tag.wire_type() == 2 => {
                             let mut_ref = loop {
                                 if let ::core::option::Option::Some(variant) = &mut self
                                     .r#body
