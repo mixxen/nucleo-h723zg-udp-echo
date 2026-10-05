@@ -1,7 +1,7 @@
 # Messaging Benchmark: Phased Implementation Plan
 
 Date: 2026-10-04 HST (2026-10-05 UTC)  
-Status: B1 contract and reference checks delivered for review; B2–B5 planned.
+Status: B1 merged; B2 measurement core delivered for review, live integration pending.
 Repository baseline: `0ea9a631917e0809ec11619115a18e3f71a301c0` (Phase 6 merged).
 
 This is the follow-on to the [original messaging plan](PLAN.md). It covers the
@@ -60,8 +60,8 @@ until real results are available.
 
 | Stage | Deliverable | Exit criteria | Status |
 |---|---|---|---|
-| B1 | Benchmark contract and resource budget | Equivalent messages, limits, compatibility rules and fixed-memory/socket budget | Delivered for review; runtime validation pending |
-| B2 | Host load generator and live metrics | Fault-controlled host tests prove pacing, correlation, bounded tracking and correct metrics | Planned |
+| B1 | Benchmark contract and resource budget | Equivalent messages, limits, compatibility rules and fixed-memory/socket budget | Merged, PR #8 (`60a7605`); runtime validation pending |
+| B2 | Host load generator and live metrics | Fault-controlled host tests prove pacing, correlation, bounded tracking and correct metrics | In progress: measurement core for review; codec/live runtime pending |
 | B3 | NUCLEO benchmark support | All six format/CRC configurations build and interoperate; physical operation recorded separately | Planned |
 | B4 | Stress and soak orchestration | Sweeps, long-run reporting, thresholds, recovery checks and interruption handling verified | Planned |
 | B5 | Physical characterization and report | Reproducible board results establish a tested operating range and disclose unresolved failures | Planned |
@@ -93,6 +93,11 @@ scenarios are specifications, not executed runtime tests. See the current
 [checkpoint](CHECKPOINT.md) for verification and remaining gates.
 
 ### B2: Host load generator and live metrics
+
+Progress and review split: [B2 implementation notes](BENCHMARK_B2.md).
+The first increment provides bounded accounting/reporting and deterministic tests.
+The second must integrate benchmark codecs, controls, probes and listeners before
+this stage can be marked complete.
 
 - Add paced probes with multiple outstanding requests, bounded tracking and
   strong run/request correlation. Keep the ordinary read-command client usable.
@@ -204,7 +209,7 @@ progress table with the PR/commit, verification performed and remaining gates.
 Preserve unrelated repository changes and keep documentation readable for someone
 learning Rust.
 
-B1 began after plan PR #7 merged (`a90c7c7`). B2 has not started. Completion means a
+B1 began after plan PR #7 merged (`a90c7c7`); B2 began after PR #8 (`60a7605`). Completion means a
 reproducible benchmark toolset and physical evidence for the tested operating
 range. Production requirements, final format/CRC policy and deployment acceptance
 remain separate decisions.
