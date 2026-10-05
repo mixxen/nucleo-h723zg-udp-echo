@@ -46,9 +46,19 @@ const GROUP: Ipv4Address = Ipv4Address::new(239, 255, 42, 1);
 const DEVICE_ID: &str = "board-01";
 bind_interrupts!(struct RngInterrupts {RNG => rng::InterruptHandler<RNG>;});
 fn add(counter: &AtomicU32, amount: u64) {
-    let _ = counter.fetch_update(Ordering::Relaxed, Ordering::Relaxed, |value| {
-        Some(value.saturating_add(amount.min(u32::MAX as u64) as u32))
-    });
+    let increment = amount.min(u32::MAX as u64) as u32;
+    let mut value = counter.load(Ordering::Relaxed);
+    loop {
+        match counter.compare_exchange_weak(
+            value,
+            value.saturating_add(increment),
+            Ordering::Relaxed,
+            Ordering::Relaxed,
+        ) {
+            Ok(_) => break,
+            Err(current) => value = current,
+        }
+    }
 }
 #[embassy_executor::task]
 async fn net_task(mut runner: embassy_net::Runner<'static, native_rmii::Device>) -> ! {
