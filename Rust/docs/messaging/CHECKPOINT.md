@@ -1,4 +1,32 @@
-# Phase 6 checkpoint
+# Messaging checkpoint
+
+## Benchmark B1: contract and resource budget
+
+Date: 2026-10-05 UTC. Base: merged benchmark plan PR #7, `a90c7c7`.
+B1 delivered for review on `messaging/benchmark-b1`; B2–B5 are not implemented.
+See the [benchmark plan](BENCHMARK_PLAN.md), [contract](BENCHMARK_CONTRACT.md)
+and [resource budget](BENCHMARK_RESOURCES.md).
+
+- Added an isolated benchmark Protobuf schema/profile with equivalent CSV/JSON
+  mappings, 0–512-byte deterministic payloads, discovery, probes, configuration,
+  lease renewal/stop, and multicast status/health.
+- Specified boot/session/epoch correlation, ownership, idempotency, expiry,
+  bounded rates/storage, socket allocation and future firmware resource gates.
+- Reference checker passes 53 fixtures across all six format/CRC configurations,
+  a manual three-format golden request, and 15 semantic rejection cases.
+  Largest tested datagram is 884 bytes (JSON with CRC). Fifteen state scenarios
+  are specified for later executable host/firmware tests.
+- Existing Phase 1 schema/fixture checker passes. The B1 checker is wired into
+  the portable verification entry point. The complete local gate could not run
+  because this workspace has no Rust toolchain; CI must supply that evidence.
+- Normal schema, generated Rust, firmware and existing runtime behavior are
+  unchanged. No benchmark throughput, ARM memory or lease behavior is measured.
+
+Alex reported successfully loading and running the program on a NUCLEO. This is
+initial hardware smoke evidence; the image/configuration and measurements remain
+unrecorded. Physical acceptance gates below remain open.
+
+## Previous Phase 6 checkpoint (retained evidence)
 
 Date: 2026-10-01 UTC. Base: merged Phase 5, `60e0b25` (PR #5).
 Phase 5's Rust and Messaging prototype CI workflows passed before this work.
