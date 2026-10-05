@@ -9,6 +9,7 @@ param(
     [ValidateSet("", "csv", "json", "protobuf")]
     [string]$Messaging = "",
     [switch]$Crc,
+    [switch]$MessagingBenchmark,
     [switch]$W5500,
     [switch]$W5500Offload,
     [switch]$Benchmark,
@@ -18,6 +19,7 @@ param(
 
 $ErrorActionPreference = "Stop"
 $Messaging = $Messaging.ToLowerInvariant()
+if ($MessagingBenchmark -and -not $Messaging) { throw "-MessagingBenchmark requires -Messaging csv|json|protobuf." }
 $projectRoot = Split-Path -Parent $PSScriptRoot
 $repositoryRoot = Split-Path -Parent $projectRoot
 
@@ -58,6 +60,7 @@ if (-not $SkipBuild) {
         -MulticastSmoke:$MulticastSmoke `
         -Messaging $Messaging `
         -Crc:$Crc `
+        -MessagingBenchmark:$MessagingBenchmark `
         -W5500:$W5500 `
         -W5500Offload:$W5500Offload `
         -Benchmark:$Benchmark `
@@ -84,6 +87,9 @@ $signedApplicationName = if ($Messaging) {
 }
 if ($Crc) {
     $signedApplicationName = $signedApplicationName.Replace("-signed.bin", "-crc-signed.bin")
+}
+if ($MessagingBenchmark) {
+    $signedApplicationName = $signedApplicationName.Replace("-signed.bin", "-benchmark-signed.bin")
 }
 if ($Profiling) {
     $signedApplicationName = $signedApplicationName.Replace("-signed.bin", "-profiling-signed.bin")

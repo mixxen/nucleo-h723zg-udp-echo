@@ -1,4 +1,5 @@
 //! Opt-in benchmark codec. No allocator; unchanged normal schema and framing.
+pub mod service;
 use crate::{
     CodecError, Format, MAX_BODY,
     framing::{self, CrcMode},
@@ -10,7 +11,8 @@ mod wire {
 }
 #[cfg(feature = "protobuf")]
 use wire::messaging_::benchmark_::v1_ as pb;
-#[allow(clippy::field_reassign_with_default)]
+// Generated empty-message conversions use the same template as populated ones.
+#[allow(clippy::field_reassign_with_default, clippy::let_and_return)]
 pub mod model {
     include!("generated/benchmark_model.rs");
 }

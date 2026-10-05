@@ -10,6 +10,7 @@ param(
     [ValidateSet("", "csv", "json", "protobuf")]
     [string]$Messaging = "",
     [switch]$Crc,
+    [switch]$MessagingBenchmark,
     [switch]$W5500,
     [switch]$W5500Offload,
     [switch]$Benchmark,
@@ -19,6 +20,7 @@ param(
 
 $ErrorActionPreference = "Stop"
 $Messaging = $Messaging.ToLowerInvariant()
+if ($MessagingBenchmark -and -not $Messaging) { throw "-MessagingBenchmark requires -Messaging csv|json|protobuf." }
 $projectRoot = Split-Path -Parent $PSScriptRoot
 $repositoryRoot = Split-Path -Parent $projectRoot
 $artifacts = Join-Path $projectRoot "artifacts"
@@ -66,6 +68,7 @@ $binaryName = if ($Messaging) {
 }
 $artifactPrefix = if ($Messaging) { "firmware-messaging-$Messaging" } elseif ($MulticastSmoke) { "firmware-multicast-smoke" } elseif ($W5500Offload) { "firmware-w5500-offload" } elseif ($W5500) { "firmware-w5500" } elseif ($NativeUdp) { "firmware-native-udp" } else { "firmware" }
 if ($Crc) { $artifactPrefix += "-crc" }
+if ($MessagingBenchmark) { $artifactPrefix += "-benchmark" }
 if ($Profiling) {
     $artifactPrefix += "-profiling"
 } elseif ($Performance) {
@@ -93,6 +96,7 @@ try {
     if ($NativeUdp -or $W5500 -or $W5500Offload -or $MulticastSmoke -or $Messaging) {
         $feature = if ($Messaging) { "messaging-$Messaging" } elseif ($MulticastSmoke) { "multicast-smoke" } elseif ($W5500Offload) { "wiznet-offload" } elseif ($W5500) { "wiznet" } else { "native-udp" }
         if ($Crc) { $feature += ",messaging-crc" }
+        if ($MessagingBenchmark) { $feature += ",messaging-benchmark" }
         if ($Profiling) {
             $feature += ",profiling"
         } elseif ($Performance) {

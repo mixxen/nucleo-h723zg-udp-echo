@@ -17,6 +17,7 @@ import sys
 import time
 
 from benchmark_service import Service, valid_configuration
+from benchmark_rust_service import RustService
 from benchmark_wire import Wire, PROFILE, ROOT, pattern
 from codec import CodecError
 from load_metrics import Pacer, ProbeTracker, RunIdentity, StreamTracker
@@ -62,7 +63,12 @@ def listener(group, port, interface):
 
 def responder(args, stop=None, ready=None, fault_hook=None):
     wire = Wire(args.format, args.crc)
-    service = Service(args.device, nonce(), args.format, args.crc, time.monotonic_ns())
+    service_class = (
+        RustService if getattr(args, "service", "rust") == "rust" else Service
+    )
+    service = service_class(
+        args.device, nonce(), args.format, args.crc, time.monotonic_ns()
+    )
     delayed = []  # Test-only fault injection, bounded to 64 queued datagrams.
     previous_epoch = service.epoch
     with ExitStack() as resources:
@@ -159,6 +165,8 @@ def responder(args, stop=None, ready=None, fault_hook=None):
                         service.count("skipped_publications")
         finally:
             service.end()
+            if isinstance(service, RustService):
+                service.close()
 
 
 def exchange(sock, target, wire, message, expected, timeout=1.5):
@@ -221,6 +229,8 @@ def provenance(wire):
             for p in (
                 Path(__file__),
                 Path(__file__).with_name("benchmark_service.py"),
+                Path(__file__).with_name("benchmark_rust_service.py"),
+                Path(__file__).with_name("benchmark_wire.py"),
                 Path(__file__).with_name("load_metrics.py"),
                 Path(__file__).with_name("load_report.py"),
             )
@@ -637,9 +647,20 @@ def parser():
         ):
             command.add_argument("--" + name, type=int, default=default)
     server.add_argument("--bind", default="0.0.0.0")
+    server.add_argument(
+        "--service",
+        choices=("rust", "python"),
+        default="rust",
+        help="portable firmware service, or independent Python reference",
+    )
     client.add_argument("--target", required=True)
     client.add_argument("--target-kind", choices=("host", "board"), required=True)
     client.add_argument("--image-sha256")
+    client.add_argument(
+        "--instrumented",
+        action="store_true",
+        help="label a separately built profiling image in the manifest",
+    )
     client.add_argument("--output", required=True)
     for name, default in (
         ("payload-bytes", 64),

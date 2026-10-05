@@ -1,5 +1,29 @@
 # Messaging checkpoint
 
+## Benchmark B3: opt-in firmware
+
+Date: 2026-10-05 UTC. Base: merged PR #10, `51e1e80`; both CI workflows passed
+before merge. Continuation: `messaging/benchmark-b3`, delivered for review.
+
+- Portable no-allocator Rust lease/control/scheduling service shared by firmware
+  and the default host responder. Six new state tests cover ownership, replay,
+  atomic rejection, exact expiry, suppression, exhaustion, patterns and schedules.
+- Opt-in firmware coordinator adds unicast control/probes and two independently
+  paced multicast streams while retaining normal traffic. Bounded nonblocking
+  queues, newest-sample scheduling and link/config/lease cancellation.
+- Benchmark codec and socket startup checks participate in boot confirmation.
+  Signing/flash helpers accept `-MessagingBenchmark`; CI adds the benchmark matrix.
+- Portable gate passes: 14 Rust tests, existing 32 Python groups, 16 metrics tests,
+  10 live codec/service/socket methods, generation/lint and ARM no-allocator link.
+  Six actual-Rust-service socket modes, fault injection and interruption pass.
+- Six baseline and six profiling ARM images pass build/lint/signature/resource
+  gates. Static RAM: 38,144 / 38,456 bytes respectively; maximum signed image:
+  144,072 bytes. Rollback variant and invalid-format checks also pass.
+
+See [B3 build/trial instructions and limitations](BENCHMARK_B3.md). Physical
+benchmark boot/network/lease/recovery tests and stack high-water remain pending.
+B4 stress/soak orchestration is next; no physical performance result is claimed.
+
 ## Benchmark B2: live host integration
 
 Date: 2026-10-05 UTC. Base: merged metrics PR #9, `90f70d8`.

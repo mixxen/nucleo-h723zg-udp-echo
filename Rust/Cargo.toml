@@ -15,6 +15,7 @@ multicast-smoke = ["dep:messaging-codec", "messaging-codec/protobuf", "embassy-n
 # Exactly one wire format per full messaging image; host defaults still include all three.
 messaging = ["dep:messaging-codec", "embassy-net/multicast", "defmt-rtt/disable-blocking-mode"]
 messaging-crc = ["messaging"]
+messaging-benchmark = ["messaging", "messaging-codec/benchmark"]
 messaging-csv = ["messaging", "messaging-codec/csv"]
 messaging-json = ["messaging", "messaging-codec/json"]
 messaging-protobuf = ["messaging", "messaging-codec/protobuf"]

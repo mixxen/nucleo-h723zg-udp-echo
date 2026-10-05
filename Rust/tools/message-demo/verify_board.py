@@ -6,6 +6,7 @@ The temporary key is disposable and cannot sign for the provisioned bootloader.
 """
 
 import itertools
+import argparse
 import json
 from pathlib import Path
 import re
@@ -47,6 +48,12 @@ def cargo(operation, features):
 
 
 def main():
+    global ARTIFACTS
+    parser = argparse.ArgumentParser()
+    parser.add_argument("--benchmark", action="store_true")
+    args = parser.parse_args()
+    if args.benchmark:
+        ARTIFACTS = RUST / "artifacts" / "messaging-benchmark"
     ARTIFACTS.mkdir(parents=True, exist_ok=True)
     host = next(
         line.split(": ", 1)[1]
@@ -66,6 +73,7 @@ def main():
         "compiler": capture(["rustc", "+stable", "--version"]),
         "target": TARGET,
         "profile": "release",
+        "benchmark": args.benchmark,
         "hardware_tested": False,
         "images": [],
     }
@@ -73,13 +81,21 @@ def main():
     with tempfile.TemporaryDirectory(prefix="messaging-sign-") as temporary:
         key = Path(temporary) / "ci-ed25519.pem"
         run(imgtool + ["keygen", "--key", key, "--type", "ed25519"])
-        for encoding, crc in itertools.product(
-            ("csv", "json", "protobuf"), ("off", "on")
+        for encoding, crc, instrumentation in itertools.product(
+            ("csv", "json", "protobuf"),
+            ("off", "on"),
+            ("baseline", "profiling") if args.benchmark else ("baseline",),
         ):
             label = f"{encoding}-{crc}"
+            if instrumentation != "baseline":
+                label += "-" + instrumentation
             features = (
                 "messaging-" + encoding + (",messaging-crc" if crc == "on" else "")
             )
+            if args.benchmark:
+                features += ",messaging-benchmark"
+            if instrumentation == "profiling":
+                features += ",profiling"
             metadata = json.loads(
                 capture(
                     [
@@ -103,7 +119,8 @@ def main():
             enabled = next(
                 n["features"] for n in metadata["resolve"]["nodes"] if n["id"] == codec
             )
-            assert enabled == [encoding], f"Unexpected codec features: {enabled}"
+            expected = sorted([encoding] + (["benchmark"] if args.benchmark else []))
+            assert enabled == expected, f"Unexpected codec features: {enabled}"
             run(cargo("clippy", features) + ["--", "-D", "warnings"])
             run(cargo("build", features))
             elf = ARTIFACTS / f"{label}.elf"
@@ -145,6 +162,8 @@ def main():
                 )
                 if 0x24000000 <= int(address) < 0x24020000
             )
+            if args.benchmark:
+                assert ram <= 65536, "Benchmark static RAM exceeds B1 gate"
             symbols = capture(
                 [
                     llvm / "llvm-nm",
@@ -160,6 +179,7 @@ def main():
                 {
                     "encoding": encoding,
                     "crc": crc,
+                    "instrumentation": instrumentation,
                     "codec_features": enabled,
                     "unsigned_bytes": unsigned.stat().st_size,
                     "signed_bytes": signed.stat().st_size,
@@ -168,12 +188,16 @@ def main():
                 }
             )
     # Instrumented and deliberately unconfirmed builds stay outside the baseline size table.
-    for extra in ("profiling", "rollback-test"):
-        run(
-            cargo("clippy", "messaging-protobuf,messaging-crc," + extra)
-            + ["--", "-D", "warnings"]
+    for extra in (
+        ("rollback-test",) if args.benchmark else ("profiling", "rollback-test")
+    ):
+        features = (
+            "messaging-protobuf,messaging-crc,"
+            + extra
+            + (",messaging-benchmark" if args.benchmark else "")
         )
-        run(cargo("build", "messaging-protobuf,messaging-crc," + extra))
+        run(cargo("clippy", features) + ["--", "-D", "warnings"])
+        run(cargo("build", features))
     # An ambiguous firmware image must fail before it can be packaged.
     for invalid in ("messaging", "messaging-csv,messaging-json"):
         result = subprocess.run(

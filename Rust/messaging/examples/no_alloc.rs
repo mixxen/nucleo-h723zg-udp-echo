@@ -16,6 +16,21 @@ pub extern "C" fn _start() -> ! {
         const _: () = assert!(core::mem::size_of::<benchmark::model::Envelope>() <= 1536);
         let input = black_box(br#"{"protocol_version":1,"kind":1,"device_id":"board-01","session_id":"0123456789abcdef","request_id":1,"capabilities":{}}"#);
         let message = benchmark::decode(Format::Json, CrcMode::Off, input).unwrap();
+        let mut service = benchmark::service::Service::new(
+            "board-01".try_into().unwrap(),
+            "0123456789abcdef".try_into().unwrap(),
+            Format::Json,
+            CrcMode::Off,
+            0,
+        );
+        let peer = benchmark::service::Peer {
+            address: [127, 0, 0, 1],
+            port: 42010,
+        };
+        black_box(service.handle(black_box(&message), peer, black_box(1)));
+        black_box(service.publication(black_box(0), black_box(10000)));
+        black_box(service.publication(black_box(1), black_box(10000)));
+        service.end();
         for format in [Format::Csv, Format::Json, Format::Protobuf] {
             for crc in [CrcMode::Off, CrcMode::On] {
                 let length =

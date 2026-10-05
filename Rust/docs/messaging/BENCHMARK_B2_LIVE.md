@@ -2,8 +2,8 @@
 
 The host benchmark now sends command probes while receiving multicast status and
 health, using the opt-in portable Rust benchmark codec. It supports CSV, JSON and
-Protobuf, each with explicitly selected CRC off/on. This is B2 host tooling;
-benchmark support in the NUCLEO firmware is B3 and is not implemented yet.
+Protobuf, each with explicitly selected CRC off/on. [B3 firmware](BENCHMARK_B3.md)
+now implements the benchmark service; physical board acceptance remains pending.
 
 ## Build and run a local demo
 
@@ -53,8 +53,8 @@ The interface is always explicit. Multicast uses group 239.255.42.1, TTL 1, and
 the B1 ports 42010/42011/42012 by default. Alternate ports are for isolated host
 tests; initial board firmware will use the fixed contract ports.
 
-`--target-kind board` requires an image SHA-256, but existing board images do not
-yet implement this benchmark service. Do not interpret timeout as proof that the
+`--target-kind board` requires an image SHA-256 and a B3 image built with
+`messaging-benchmark`. Do not interpret timeout as proof that the
 device is offline or that a particular firmware version is installed.
 
 ## Runtime and measurement behavior
@@ -94,8 +94,7 @@ device is offline or that a particular firmware version is installed.
 The host responder emits benchmark traffic only. It does not reproduce the
 ordinary board application's background 10 Hz status / 1 Hz health streams.
 The manifest labels this difference, so host results must not be presented as
-equivalent board throughput measurements. Board background traffic remains a B3
-integration requirement.
+equivalent board throughput measurements. B3 firmware retains the normal streams.
 
 ## Saved evidence
 
@@ -128,9 +127,11 @@ when its disk is unavailable. Abrupt process termination relies on lease expiry.
 
 The `benchmark` feature in `messaging-codec` is disabled by default. The existing
 host crate enables it and exports a small host-only shared-library binding.
-Encoding/decoding uses the same no-allocator Rust codec as future firmware;
-the Python service owns sockets, clocks, controls and statistics. It is not a
-second Python serializer used for timing.
+Encoding/decoding uses the same no-allocator Rust codec as firmware. Since B3,
+the responder also uses the portable Rust lease/scheduling service by default;
+Python owns host sockets, clocks and statistics. `responder --service python`
+selects the independent B2 state-machine reference for comparison. Timing includes
+the host-only FFI/JSON bridge and is not an isolated MCU service measurement.
 
 `generate_benchmark.py` compiles the authoritative descriptor and uses the shared
 micropb generator. CSV input borrows up to 20 fields from 1,016-byte scratch;
@@ -143,8 +144,8 @@ existing adapter, rather than adding a separate enum conversion layer in B2.
 Exactly one body is enforced by validation and the payload is stored only once.
 An ARM compile-time gate proves the entire model fits the B1 1,536-byte budget.
 This refines B1's proposed enum representation; B3 may reduce it further if its
-measured task/stack budget requires that optimization. Signed firmware and total
-RAM limits have not been measured for benchmark-enabled firmware yet.
+measured task/stack budget requires that optimization. B3 records signed-image
+and static RAM measurements; runtime stack evidence still requires a board.
 
 Validation includes all 53 B1 fixtures through six Rust codec modes, independent
 CSV/JSON and protoc Protobuf interoperability, a manual golden request, long-f32
