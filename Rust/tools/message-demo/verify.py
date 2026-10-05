@@ -25,6 +25,7 @@ host = next(
 )
 run([sys.executable, RUST / "protocol/tools/check_phase1.py"])
 run([sys.executable, RUST / "protocol/benchmark/check_contract.py"])
+run([sys.executable, HERE / "test_load_metrics.py"])
 run([sys.executable, HERE / "check_generation.py"])
 for crate in (RUST / "messaging", HERE, HERE / "generator"):
     run(["cargo", TOOLCHAIN, "fmt", "--manifest-path", crate / "Cargo.toml", "--check"])

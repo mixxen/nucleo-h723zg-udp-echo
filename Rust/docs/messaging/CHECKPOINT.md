@@ -1,5 +1,27 @@
 # Messaging checkpoint
 
+## Benchmark B2: measurement core, first increment
+
+Date: 2026-10-05 UTC. Base: merged B1 PR #8, `60a7605`.
+Both B1 CI workflows passed at `07a4837` before merge. An existing multicast-smoke
+atomic update was rewritten with an equivalent compare/exchange loop to avoid a
+new compiler deprecation while retaining older compiler compatibility.
+
+B2 is **in progress**, split into measurement accounting and codec/live runtime
+review units. See [B2 notes](BENCHMARK_B2.md) for exact semantics and remaining gates.
+
+- Added bounded request/recent history, absolute pacing without catch-up bursts,
+  mergeable fixed-bin RTT histograms and bitmap multicast sequence accounting.
+- Added flushed incremental JSONL/CSV reports with explicit interrupted outcomes
+  and streaming evidence-integrity inspection.
+- Sixteen deterministic accounting/report tests pass locally and are included in
+  the portable verification entry point. The complete portable gate also passes
+  with Rust 1.90.0: schema/generation checks, host/ARM lint, eight Rust tests, the
+  existing 32 Python groups, and the ARM no-allocator link. No new networking,
+  board performance or soak result is claimed by the accounting tests.
+- Benchmark Rust codecs, live CLI/responder/listeners, lease state tests and
+  socket-level fault tests remain B2 work. B3–B5 have not started.
+
 ## Benchmark B1: contract and resource budget
 
 Date: 2026-10-05 UTC. Base: merged benchmark plan PR #7, `a90c7c7`.
